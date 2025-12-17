@@ -2,7 +2,7 @@
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
+from datetime import datetime, date, time, timedelta
 
 from app.meds.models import Medication, MedicationSchedule, IntakeLog
 
@@ -16,13 +16,62 @@ async def create_medication(db: AsyncSession, senior_id: int, data: dict) -> Med
 
 async def add_schedule(db: AsyncSession, medication_id: int, data: dict) -> MedicationSchedule:
     res = await db.execute(select(Medication).where(Medication.id == medication_id))
-    if not res.scalar_one_or_none():
+    medication = res.scalar_one_or_none()
+    if not medication:
         raise HTTPException(status_code=404, detail="Medication not found")
 
     sched = MedicationSchedule(medication_id=medication_id, **data)
     db.add(sched)
     await db.flush()
+    
+    # Crear recordatorios automáticos para cada horario
+    await create_medication_reminders(db, medication, sched)
+    
     return sched
+
+
+async def create_medication_reminders(db: AsyncSession, medication: Medication, schedule: MedicationSchedule):
+    """Crea recordatorios automáticos para los horarios de la medicina"""
+    from app.reminders.models import Reminder
+    
+    # Si no hay horarios, no crear recordatorios
+    if not schedule.hours:
+        return
+    
+    # Fecha de inicio (hoy si no se especifica)
+    start = schedule.start_date or date.today()
+    # Fecha fin (30 días si no se especifica)
+    end = schedule.end_date or (start + timedelta(days=30))
+    
+    # Crear recordatorios para los próximos días
+    current_date = start
+    days_to_create = min(7, (end - start).days + 1)  # Crear para 7 días o hasta el final
+    
+    for day_offset in range(days_to_create):
+        current_date = start + timedelta(days=day_offset)
+        
+        # Verificar si el día de la semana está en el schedule
+        weekday = current_date.weekday()  # 0=lunes, 6=domingo
+        if schedule.days_of_week and weekday not in schedule.days_of_week:
+            continue
+        
+        # Crear un recordatorio por cada hora
+        for hour in schedule.hours:
+            scheduled_datetime = datetime.combine(current_date, time(hour=hour))
+            
+            # Solo crear si es en el futuro
+            if scheduled_datetime > datetime.now():
+                reminder = Reminder(
+                    senior_id=medication.senior_id,
+                    title=f"Tomar {medication.name}",
+                    description=f"Dosis: {medication.dose} {medication.unit}. {medication.notes or ''}",
+                    scheduled_at=scheduled_datetime,
+                    is_completed=False,
+                    medication_id=medication.id
+                )
+                db.add(reminder)
+    
+    await db.flush()
 
 
 async def log_intake(db: AsyncSession, data: dict) -> IntakeLog:

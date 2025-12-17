@@ -8,7 +8,7 @@ export interface Reminder {
   description?: string;
   scheduled_at: string;
   repeat_rule?: string;
-  status: string;
+  status: 'PENDING' | 'DONE' | 'CANCELLED';
   done_at?: string;
   actor_user_id?: number;
   created_at: string;
@@ -22,11 +22,25 @@ export interface ReminderCreate {
   repeat_rule?: string;
 }
 
+export interface ReminderUpdate {
+  title?: string;
+  description?: string;
+  scheduled_at?: string;
+  repeat_rule?: string;
+  status?: 'PENDING' | 'DONE' | 'CANCELLED';
+}
+
 class RemindersService {
-  async getReminders(seniorId: number): Promise<Reminder[]> {
+  async getReminders(seniorId: number, date?: string, status?: string): Promise<Reminder[]> {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await api.get<Reminder[]>(`/reminders/seniors/${seniorId}/reminders?date_=${today}`);
+      const params: any = {};
+      if (date) params.date = date;
+      if (status) params.status = status;
+      
+      const response = await api.get<Reminder[]>(
+        `/reminders/seniors/${seniorId}/reminders`,
+        { params }
+      );
       return response.data;
     } catch (error) {
       console.error('Error obteniendo recordatorios:', error);
@@ -44,12 +58,45 @@ class RemindersService {
     }
   }
 
-  async markDone(reminderId: number): Promise<boolean> {
+  async markDone(reminderId: number): Promise<Reminder | null> {
     try {
-      await api.post(`/reminders/${reminderId}/done`);
-      return true;
+      const response = await api.post<Reminder>(`/reminders/${reminderId}/done`);
+      return response.data;
     } catch (error) {
       console.error('Error marcando recordatorio:', error);
+      return null;
+    }
+  }
+
+  async updateStatus(reminderId: number, status: 'PENDING' | 'DONE' | 'CANCELLED'): Promise<Reminder | null> {
+    try {
+      const response = await api.patch<Reminder>(
+        `/reminders/${reminderId}/status`,
+        { status }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error actualizando estado:', error);
+      return null;
+    }
+  }
+
+  async updateReminder(reminderId: number, data: ReminderUpdate): Promise<Reminder | null> {
+    try {
+      const response = await api.patch<Reminder>(`/reminders/${reminderId}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error actualizando recordatorio:', error);
+      return null;
+    }
+  }
+
+  async deleteReminder(reminderId: number): Promise<boolean> {
+    try {
+      await api.delete(`/reminders/${reminderId}`);
+      return true;
+    } catch (error) {
+      console.error('Error eliminando recordatorio:', error);
       return false;
     }
   }

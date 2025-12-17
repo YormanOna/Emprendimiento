@@ -22,14 +22,18 @@ export interface MedicationCreate {
 export interface Schedule {
   id: number;
   medication_id: number;
-  time_of_day: string;
-  frequency: string;
+  start_date?: string;
+  end_date?: string;
+  hours: number[];
+  days_of_week?: number[];
   created_at: string;
 }
 
 export interface ScheduleCreate {
-  time_of_day: string;
-  frequency: string;
+  start_date?: string;
+  end_date?: string;
+  hours: number[];
+  days_of_week?: number[];
 }
 
 export interface Intake {
@@ -99,13 +103,43 @@ class MedicationsService {
     }
   }
 
-  async recordIntake(data: IntakeCreate): Promise<Intake | null> {
+  async logIntake(data: IntakeCreate): Promise<Intake | null> {
     try {
       const response = await api.post<Intake>('/meds/intakes', data);
       return response.data;
     } catch (error) {
-      console.error('Error registrando toma:', error);
+      console.error('Error logging intake:', error);
       return null;
+    }
+  }
+
+  async markMedicationTaken(medicationId: number): Promise<Intake | null> {
+    try {
+      const response = await api.post<Intake>(`/meds/medications/${medicationId}/take`);
+      return response.data;
+    } catch (error) {
+      console.error('Error marking medication as taken:', error);
+      return null;
+    }
+  }
+
+  async updateIntakeStatus(intakeId: number, status: string): Promise<Intake | null> {
+    try {
+      const response = await api.patch<Intake>(`/meds/intakes/${intakeId}/status`, { status });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating intake status:', error);
+      return null;
+    }
+  }
+
+  async deleteMedication(medicationId: number): Promise<boolean> {
+    try {
+      await api.delete(`/meds/medications/${medicationId}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting medication:', error);
+      return false;
     }
   }
 }

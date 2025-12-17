@@ -172,17 +172,36 @@ export default function SeniorDashboard() {
       <View style={styles.quickAccess}>
         <TouchableOpacity 
           style={styles.accessCard}
-          onPress={() => router.push('/pages/senior/medications')}
+          onPress={() => router.push('/pages/senior/medications-manage' as any)}
         >
           <Ionicons name="medical" size={32} color="#8b5cf6" />
-          <Text style={styles.accessText}>Mis Medicinas</Text>
+          <Text style={styles.accessText}>Gestionar Medicinas</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.accessCard}
-          onPress={() => router.push('/pages/senior/appointments')}
+          onPress={() => router.push('/pages/senior/appointments-manage' as any)}
         >
           <Ionicons name="calendar" size={32} color="#10b981" />
-          <Text style={styles.accessText}>Mis Citas</Text>
+          <Text style={styles.accessText}>Gestionar Citas</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Botón de hospitales */}
+      <View style={styles.section}>
+        <TouchableOpacity 
+          style={styles.hospitalButton}
+          onPress={() => router.push('/pages/hospitals-map' as any)}
+        >
+          <View style={styles.hospitalButtonContent}>
+            <View style={styles.hospitalIconContainer}>
+              <Ionicons name="medical" size={28} color="#fff" />
+            </View>
+            <View style={styles.hospitalTextContainer}>
+              <Text style={styles.hospitalButtonTitle}>Hospitales Cercanos</Text>
+              <Text style={styles.hospitalButtonSubtitle}>Ver mapa de hospitales en Ecuador</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
+          </View>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -237,7 +256,44 @@ const styles = StyleSheet.create({
   reminderTime: { fontSize: 13, color: '#64748b' },
   emptyState: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { fontSize: 14, color: '#94a3b8', marginTop: 12 },
-  quickAccess: { flexDirection: 'row', padding: 16, gap: 12, paddingBottom: 32 },
+  quickAccess: { flexDirection: 'row', padding: 16, gap: 12, paddingBottom: 16 },
   accessCard: { flex: 1, backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
   accessText: { fontSize: 15, fontWeight: '600', color: '#1e293b', marginTop: 12 },
+  hospitalButton: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 32,
+  },
+  hospitalButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hospitalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  hospitalTextContainer: {
+    flex: 1,
+  },
+  hospitalButtonTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  hospitalButtonSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+  },
 });

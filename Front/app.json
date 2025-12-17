@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyDsmU4dsVysEw5mx1fBxp6Dkto2Kjcn26g"
+      },
+      "bundleIdentifier": "com.anonymous.Front"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +23,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDsmU4dsVysEw5mx1fBxp6Dkto2Kjcn26g"
+        }
+      },
+      "package": "com.anonymous.Front"
     },
     "web": {
       "output": "static",
@@ -27,6 +37,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyDsmU4dsVysEw5mx1fBxp6Dkto2Kjcn26g"
+        }
+      ],
       [
         "expo-splash-screen",
         {

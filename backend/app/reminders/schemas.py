@@ -25,3 +25,11 @@ class ReminderPublic(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReminderUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    description: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    repeat_rule: Optional[str] = None
+    status: Optional[ReminderStatus] = None

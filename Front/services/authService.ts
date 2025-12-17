@@ -19,6 +19,7 @@ export interface User {
   email: string;
   role: string;
   is_active: boolean;
+  senior_id?: number; // ID del senior si el usuario es de tipo SENIOR
 }
 
 export interface AuthResponse {

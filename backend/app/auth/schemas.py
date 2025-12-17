@@ -11,6 +11,7 @@ class UserPublic(BaseModel):
     email: EmailStr
     role: UserRole
     is_active: bool
+    senior_id: Optional[int] = None  # ID del senior si el usuario es de tipo SENIOR
 
     class Config:
         from_attributes = True

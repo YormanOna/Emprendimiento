@@ -98,6 +98,13 @@ export default function AdminDashboard() {
             <Ionicons name="document-text" size={28} color="#f59e0b" />
             <Text style={styles.actionText}>Reportes</Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionCard} 
+            onPress={() => router.push('/pages/hospitals-map' as any)}
+          >
+            <Ionicons name="medical" size={28} color="#ef4444" />
+            <Text style={styles.actionText}>Hospitales</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionCard} onPress={() => router.push('/pages/admin/settings')}>
             <Ionicons name="cog" size={28} color="#8b5cf6" />
             <Text style={styles.actionText}>Configuración</Text>

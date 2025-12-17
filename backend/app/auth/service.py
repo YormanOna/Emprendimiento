@@ -32,6 +32,32 @@ async def register_user(db: AsyncSession, full_name: str, email: str, password: 
     )
     db.add(user)
     await db.flush()  # obtiene user.id
+    
+    # Si es un SENIOR, crear automáticamente su perfil de senior
+    if role == UserRole.SENIOR:
+        from app.seniors.models import SeniorProfile, CareTeam, MembershipRole
+        
+        # Crear perfil de senior
+        senior_profile = SeniorProfile(
+            full_name=full_name,
+            birthdate=None,
+            conditions=None,
+            emergency_contact_name=None,
+            emergency_contact_phone=None
+        )
+        db.add(senior_profile)
+        await db.flush()  # obtiene senior_profile.id
+        
+        # Crear entrada en care_team para vincular usuario con su perfil
+        care_team = CareTeam(
+            senior_id=senior_profile.id,
+            user_id=user.id,
+            membership_role=MembershipRole.SELF,  # El senior es él mismo
+            can_view=True,
+            can_edit=True
+        )
+        db.add(care_team)
+    
     return user
 
 

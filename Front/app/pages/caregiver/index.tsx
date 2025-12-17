@@ -17,6 +17,7 @@ import seniorsService, { Senior } from '@/services/seniorsService';
 export default function CaregiverDashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [seniors, setSeniors] = useState<Senior[]>([]);
+  const [selectedSenior, setSelectedSenior] = useState<Senior | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -30,6 +31,11 @@ export default function CaregiverDashboard() {
     const seniorsData = await seniorsService.getSeniors();
     console.log('Seniors data:', JSON.stringify(seniorsData, null, 2));
     setSeniors(seniorsData);
+    
+    // Seleccionar primer senior por defecto
+    if (seniorsData.length > 0) {
+      setSelectedSenior(seniorsData[0]);
+    }
   };
 
   const onRefresh = async () => {
@@ -49,6 +55,25 @@ export default function CaregiverDashboard() {
       age--;
     }
     return age;
+  };
+
+  const handleSelectSenior = () => {
+    if (seniors.length === 0) {
+      Alert.alert('Sin pacientes', 'No hay pacientes asignados.');
+      return;
+    }
+    
+    Alert.alert(
+      'Seleccionar Paciente',
+      'Elige el paciente que deseas ver',
+      [
+        ...seniors.map((senior) => ({
+          text: senior.full_name,
+          onPress: () => setSelectedSenior(senior),
+        })),
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
   };
 
   const handleLogout = async () => {
@@ -78,28 +103,57 @@ export default function CaregiverDashboard() {
         </TouchableOpacity>
       </View>
 
-      {/* Today's Tasks */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Tareas de Hoy</Text>
-        <View style={styles.taskCard}>
-          <View style={styles.taskHeader}>
-            <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-            <Text style={styles.taskTitle}>Medicamentos Programados</Text>
+      {/* Patient Selector */}
+      {seniors.length > 0 && selectedSenior && (
+        <View style={styles.selectedPatientCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Paciente Activo</Text>
+            <TouchableOpacity style={styles.changePatientBtn} onPress={handleSelectSenior}>
+              <Text style={styles.changePatientText}>Cambiar</Text>
+              <Ionicons name="swap-horizontal" size={18} color="#f59e0b" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.taskCount}>5 pendientes</Text>
-        </View>
-        <View style={styles.taskCard}>
-          <View style={styles.taskHeader}>
-            <Ionicons name="calendar" size={24} color="#f59e0b" />
-            <Text style={styles.taskTitle}>Citas Médicas</Text>
+          <View style={styles.patientInfoRow}>
+            <View style={styles.seniorAvatar}>
+              <Text style={styles.seniorInitials}>
+                {selectedSenior.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.seniorInfo}>
+              <Text style={styles.seniorName}>{selectedSenior.full_name}</Text>
+              <Text style={styles.seniorDetail}>
+                {selectedSenior.birthdate ? `${calculateAge(selectedSenior.birthdate)} años` : 'Edad desconocida'}
+                {selectedSenior.conditions && ` • ${selectedSenior.conditions.substring(0, 30)}...`}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.taskCount}>2 próximas</Text>
         </View>
-      </View>
+      )}
 
-      {/* Patients Under Care */}
+      {/* Today's Tasks */}
+      {selectedSenior && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tareas de Hoy</Text>
+          <View style={styles.taskCard}>
+            <View style={styles.taskHeader}>
+              <Ionicons name="checkmark-circle" size={24} color="#10b981" />
+              <Text style={styles.taskTitle}>Medicamentos Programados</Text>
+            </View>
+            <Text style={styles.taskCount}>Ver detalles</Text>
+          </View>
+          <View style={styles.taskCard}>
+            <View style={styles.taskHeader}>
+              <Ionicons name="calendar" size={24} color="#f59e0b" />
+              <Text style={styles.taskTitle}>Citas Médicas</Text>
+            </View>
+            <Text style={styles.taskCount}>Ver próximas</Text>
+          </View>
+        </View>
+      )}
+
+      {/* All Patients List */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Pacientes a mi Cargo</Text>
+        <Text style={styles.sectionTitle}>Todos mis Pacientes ({seniors.length})</Text>
         {seniors.length > 0 ? (
           seniors.map((senior) => {
             const fullName = senior.full_name || 'Sin nombre';
@@ -109,16 +163,16 @@ export default function CaregiverDashboard() {
               : (nameParts[0]?.[0] || '?').toUpperCase() + (nameParts[0]?.[1] || '?').toUpperCase();
             const age = senior.birthdate ? calculateAge(senior.birthdate) : 0;
             
-            console.log('Senior:', { id: senior.id, fullName, initials, age, birthdate: senior.birthdate });
+            const isSelected = selectedSenior?.id === senior.id;
             
             return (
               <TouchableOpacity
                 key={senior.id}
-                style={styles.seniorCard}
-                onPress={() => Alert.alert('Paciente', fullName)}
+                style={[styles.seniorCard, isSelected && styles.seniorCardSelected]}
+                onPress={() => setSelectedSenior(senior)}
               >
-                <View style={styles.seniorAvatar}>
-                  <Text style={styles.seniorInitials}>
+                <View style={[styles.seniorAvatar, isSelected && styles.seniorAvatarSelected]}>
+                  <Text style={[styles.seniorInitials, isSelected && styles.seniorInitialsSelected]}>
                     {initials}
                   </Text>
                 </View>
@@ -131,7 +185,7 @@ export default function CaregiverDashboard() {
                     {senior.conditions ? ` • ${senior.conditions.substring(0, 30)}...` : ''}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                {isSelected && <Ionicons name="checkmark-circle" size={24} color="#f59e0b" />}
               </TouchableOpacity>
             );
           })
@@ -144,35 +198,49 @@ export default function CaregiverDashboard() {
       </View>
 
       {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity style={styles.actionCard}>
-            <View style={[styles.actionIcon, { backgroundColor: '#dbeafe' }]}>
-              <Ionicons name="medkit" size={24} color="#3b82f6" />
-            </View>
-            <Text style={styles.actionText}>Registrar Toma</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="document-text" size={24} color="#f59e0b" />
-            </View>
-            <Text style={styles.actionText}>Notas</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <View style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}>
-              <Ionicons name="chatbubbles" size={24} color="#10b981" />
-            </View>
-            <Text style={styles.actionText}>Mensajes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <View style={[styles.actionIcon, { backgroundColor: '#fce7f3' }]}>
-              <Ionicons name="alert-circle" size={24} color="#ec4899" />
-            </View>
-            <Text style={styles.actionText}>Emergencia</Text>
-          </TouchableOpacity>
+      {selectedSenior && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/caregiver/medications-manage' as any)}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: '#dbeafe' }]}>
+                <Ionicons name="medkit" size={24} color="#3b82f6" />
+              </View>
+              <Text style={styles.actionText}>Gestionar Medicamentos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="document-text" size={24} color="#f59e0b" />
+              </View>
+              <Text style={styles.actionText}>Notas</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}>
+                <Ionicons name="chatbubbles" size={24} color="#10b981" />
+              </View>
+              <Text style={styles.actionText}>Mensajes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/hospitals-map' as any)}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}>
+                <Ionicons name="medical" size={24} color="#ef4444" />
+              </View>
+              <Text style={styles.actionText}>Hospitales</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard}>
+              <View style={[styles.actionIcon, { backgroundColor: '#fce7f3' }]}>
+                <Ionicons name="alert-circle" size={24} color="#ec4899" />
+              </View>
+              <Text style={styles.actionText}>Emergencia</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
     </ScrollView>
   );
 }
@@ -329,5 +397,53 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1e293b',
     textAlign: 'center',
+  },
+  selectedPatientCard: {
+    backgroundColor: '#ffffff',
+    margin: 16,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  changePatientBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  changePatientText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#f59e0b',
+    marginRight: 4,
+  },
+  patientInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  seniorCardSelected: {
+    backgroundColor: '#fef3c7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
+  seniorAvatarSelected: {
+    backgroundColor: '#f59e0b',
+  },
+  seniorInitialsSelected: {
+    color: '#ffffff',
   },
 });

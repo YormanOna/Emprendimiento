@@ -7,14 +7,18 @@ import {
   StyleSheet,
   RefreshControl,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import authService, { User } from '@/services/authService';
-import statsService, { DashboardStats } from '@/services/statsService';
+import seniorsService, { Senior } from '@/services/seniorsService';
 
 export default function FamilyDashboard() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [seniors, setSeniors] = useState<Senior[]>([]);
+  const [selectedSenior, setSelectedSenior] = useState<Senior | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -25,14 +29,56 @@ export default function FamilyDashboard() {
     const userData = await authService.getCurrentUser();
     setUser(userData);
     
-    const statsData = await statsService.getDashboardStats();
-    setStats(statsData);
+    // Obtener seniors asignados a este familiar
+    const seniorsData = await seniorsService.getSeniors();
+    setSeniors(seniorsData);
+    
+    // Seleccionar el primer senior por defecto
+    if (seniorsData.length > 0) {
+      setSelectedSenior(seniorsData[0]);
+    }
+  };
+
+  const calculateAge = (birthdate: string | null): number => {
+    if (!birthdate) return 0;
+    const today = new Date();
+    const birth = new Date(birthdate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const handleSelectSenior = () => {
+    if (seniors.length === 0) {
+      Alert.alert('Sin adultos mayores', 'No hay adultos mayores asignados a tu cuidado.');
+      return;
+    }
+    
+    Alert.alert(
+      'Seleccionar Adulto Mayor',
+      'Elige el familiar que deseas monitorear',
+      [
+        ...seniors.map((senior) => ({
+          text: senior.full_name,
+          onPress: () => setSelectedSenior(senior),
+        })),
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const handleLogout = async () => {
+    await authService.logout();
+    router.replace('/login');
   };
 
   return (
@@ -44,96 +90,130 @@ export default function FamilyDashboard() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Portal Familiar 💝</Text>
-          <Text style={styles.userName}>{user?.full_name}</Text>
+          <Text style={styles.userName}>{user?.full_name || 'Familiar'}</Text>
         </View>
-        <TouchableOpacity onPress={() => authService.logout()} style={styles.logoutButton}>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
           <Ionicons name="log-out-outline" size={28} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Senior Info Card */}
-      <View style={styles.seniorCard}>
-        <View style={styles.seniorAvatar}>
-          <Ionicons name="person" size={40} color="#ec4899" />
-        </View>
-        <View style={styles.seniorInfo}>
-          <Text style={styles.seniorName}>Carmen López</Text>
-          <Text style={styles.seniorDetail}>75 años • Salud: Estable</Text>
-        </View>
-        <TouchableOpacity>
-          <Ionicons name="call" size={24} color="#10b981" />
+      {/* Senior Selector Card */}
+      {seniors.length > 0 ? (
+        <TouchableOpacity style={styles.seniorCard} onPress={handleSelectSenior}>
+          <View style={styles.seniorAvatar}>
+            <Ionicons name="person" size={40} color="#ec4899" />
+          </View>
+          <View style={styles.seniorInfo}>
+            <Text style={styles.seniorName}>
+              {selectedSenior?.full_name || 'Seleccionar familiar'}
+            </Text>
+            {selectedSenior && (
+              <Text style={styles.seniorDetail}>
+                {calculateAge(selectedSenior.birthdate)} años
+                {selectedSenior.conditions ? ` • ${selectedSenior.conditions.substring(0, 30)}` : ''}
+              </Text>
+            )}
+          </View>
+          <View style={styles.changeButton}>
+            <Ionicons name="swap-horizontal" size={20} color="#ec4899" />
+          </View>
         </TouchableOpacity>
-      </View>
+      ) : (
+        <View style={styles.emptyCard}>
+          <Ionicons name="people-outline" size={48} color="#cbd5e1" />
+          <Text style={styles.emptyText}>No hay adultos mayores asignados</Text>
+          <Text style={styles.emptySubtext}>Contacta con un administrador</Text>
+        </View>
+      )}
 
       {/* Stats */}
-      <View style={styles.statsContainer}>
-        <View style={[styles.statBox, { backgroundColor: '#dbeafe' }]}>
-          <Ionicons name="medical" size={28} color="#3b82f6" />
-          <Text style={styles.statNumber}>{stats?.total_medications || 0}</Text>
-          <Text style={styles.statLabel}>Medicamentos</Text>
-        </View>
-        <View style={[styles.statBox, { backgroundColor: '#fef3c7' }]}>
-          <Ionicons name="calendar" size={28} color="#f59e0b" />
-          <Text style={styles.statNumber}>{stats?.upcoming_appointments || 0}</Text>
-          <Text style={styles.statLabel}>Citas</Text>
-        </View>
-      </View>
+      {selectedSenior && (
+        <>
+          <View style={styles.statsContainer}>
+            <View style={[styles.statBox, { backgroundColor: '#dbeafe' }]}>
+              <Ionicons name="medical" size={28} color="#3b82f6" />
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Medicamentos</Text>
+            </View>
+            <View style={[styles.statBox, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="calendar" size={28} color="#f59e0b" />
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Citas</Text>
+            </View>
+          </View>
 
-      {/* Reminders Alert */}
-      {stats?.pending_reminders && stats.pending_reminders > 0 && (
-        <View style={styles.alertBox}>
-          <Ionicons name="notifications" size={24} color="#f59e0b" />
-          <View style={styles.alertContent}>
-            <Text style={styles.alertTitle}>Recordatorios Activos</Text>
-            <Text style={styles.alertText}>
-              {stats.pending_reminders} recordatorio(s) pendiente(s)
-            </Text>
+          {/* Emergency Contact */}
+          {selectedSenior.emergency_contact_name && (
+            <View style={styles.alertBox}>
+              <Ionicons name="call" size={24} color="#10b981" />
+              <View style={styles.alertContent}>
+                <Text style={styles.alertTitle}>Contacto de Emergencia</Text>
+                <Text style={styles.alertText}>
+                  {selectedSenior.emergency_contact_name}
+                  {selectedSenior.emergency_contact_phone && (
+                    <Text> • {selectedSenior.emergency_contact_phone}</Text>
+                  )}
+                </Text>
+              </View>
+            </View>
+          )}
+        </>
+      )}
+
+      {/* Quick Actions */}
+      {selectedSenior && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/family/appointments')}
+            >
+              <Ionicons name="calendar" size={32} color="#f59e0b" />
+              <Text style={styles.actionText}>Ver Citas</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/family/chat')}
+            >
+              <Ionicons name="chatbubbles" size={32} color="#3b82f6" />
+              <Text style={styles.actionText}>Mensajes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => Alert.alert('Emergencia', '¿Deseas contactar al equipo médico?', [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Llamar', onPress: () => {} }
+              ])}
+            >
+              <Ionicons name="alert-circle" size={32} color="#ef4444" />
+              <Text style={styles.actionText}>Emergencia</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/hospitals-map' as any)}
+            >
+              <Ionicons name="medical" size={32} color="#ef4444" />
+              <Text style={styles.actionText}>Hospitales</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard}>
+              <Ionicons name="document-text" size={32} color="#10b981" />
+              <Text style={styles.actionText}>Reportes</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="videocam" size={32} color="#ec4899" />
-            <Text style={styles.actionText}>Videollamada</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="chatbubbles" size={32} color="#3b82f6" />
-            <Text style={styles.actionText}>Mensajes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="document-text" size={32} color="#10b981" />
-            <Text style={styles.actionText}>Reportes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="alert-circle" size={32} color="#ef4444" />
-            <Text style={styles.actionText}>Emergencia</Text>
-          </TouchableOpacity>
+      {/* Medical Info */}
+      {selectedSenior && selectedSenior.conditions && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Información Médica</Text>
+          <View style={styles.infoCard}>
+            <Ionicons name="medical" size={24} color="#6366f1" />
+            <Text style={styles.infoText}>{selectedSenior.conditions}</Text>
+          </View>
         </View>
-      </View>
-
-      {/* Recent Activity */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Actividad Reciente</Text>
-        <View style={styles.activityList}>
-          {stats?.recent_activities && stats.recent_activities.length > 0 ? (
-            stats.recent_activities.map((activity) => (
-              <View key={activity.id} style={styles.activityItem}>
-                <View style={[styles.activityDot, { backgroundColor: activity.color }]} />
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityText}>{activity.description}</Text>
-                  <Text style={styles.activityTime}>{activity.timestamp}</Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No hay actividad reciente</Text>
-          )}
-        </View>
-      </View>
+      )}
     </ScrollView>
   );
 }
@@ -313,9 +393,46 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   emptyText: {
-    textAlign: 'center',
-    color: '#94a3b8',
     fontSize: 14,
-    paddingVertical: 20,
+    color: '#94a3b8',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    margin: 16,
+    padding: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: '#cbd5e1',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  changeButton: {
+    padding: 8,
+    backgroundColor: '#fce7f3',
+    borderRadius: 8,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'flex-start',
+  },
+  infoText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
   },
 });

@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import authService, { User } from '@/services/authService';
 import seniorsService, { Senior } from '@/services/seniorsService';
 
@@ -85,15 +86,47 @@ export default function DoctorPatientsScreen() {
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={64} color="#cbd5e1" />
-            <Text style={styles.emptyText}>No hay pacientes asignados</Text>
+          <Text style={styles.emptyText}>No hay pacientes asignados</Text>
           </View>
         )}
       </View>
+
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+        <View style={styles.actionsGrid}>
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/pages/hospitals-map' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}>
+              <Ionicons name="medical" size={28} color="#ef4444" />
+            </View>
+            <Text style={styles.actionText}>Hospitales</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionCard}>
+            <View style={[styles.actionIcon, { backgroundColor: '#dbeafe' }]}>
+              <Ionicons name="calendar" size={28} color="#3b82f6" />
+            </View>
+            <Text style={styles.actionText}>Citas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionCard}>
+            <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="clipboard" size={28} color="#f59e0b" />
+            </View>
+            <Text style={styles.actionText}>Reportes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionCard}>
+            <View style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}>
+              <Ionicons name="chatbubbles" size={28} color="#10b981" />
+            </View>
+            <Text style={styles.actionText}>Mensajes</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </ScrollView>
   );
-}
-
-const styles = StyleSheet.create({
+}const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: {
     backgroundColor: '#10b981',
@@ -142,4 +175,36 @@ const styles = StyleSheet.create({
   patientHistory: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },
   emptyState: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 16, color: '#94a3b8', marginTop: 16 },
+  actionsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 12,
+  },
+  actionCard: { 
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#fff', 
+    padding: 16, 
+    borderRadius: 12, 
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#1e293b',
+    textAlign: 'center',
+  },
 });

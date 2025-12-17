@@ -11,14 +11,20 @@ class Appointment(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     senior_id: Mapped[int] = mapped_column(ForeignKey("seniors.id"), index=True, nullable=False)
-    doctor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    doctor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    
+    # Campos adicionales para citas sin doctor asignado
+    doctor_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    specialty: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Alias
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="SCHEDULED", nullable=False)
 
-    notes = relationship("AppointmentNote", back_populates="appointment", cascade="all, delete-orphan")
+    appointment_notes = relationship("AppointmentNote", back_populates="appointment", cascade="all, delete-orphan")
 
 class AppointmentNote(TimestampMixin, Base):
     __tablename__ = "appointment_notes"
@@ -29,4 +35,4 @@ class AppointmentNote(TimestampMixin, Base):
     author_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     note: Mapped[str] = mapped_column(Text, nullable=False)
 
-    appointment = relationship("Appointment", back_populates="notes")
+    appointment = relationship("Appointment", back_populates="appointment_notes")

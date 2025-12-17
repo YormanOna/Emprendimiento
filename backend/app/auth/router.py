@@ -62,9 +62,28 @@ async def logout(payload: LogoutRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserPublic)
-async def get_current_user_endpoint(user: User = Depends(get_current_user)):
+async def get_current_user_endpoint(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Obtener datos del usuario autenticado actual"""
-    return user
+    from sqlalchemy import select
+    from app.seniors.models import CareTeam
+    from app.core.models import UserRole
+    
+    # Si es un usuario SENIOR, buscar el senior_id en care_team
+    senior_id = None
+    if user.role == UserRole.SENIOR:
+        # Buscar en care_team si este usuario está asociado a algún senior
+        result = await db.execute(
+            select(CareTeam.senior_id).where(CareTeam.user_id == user.id).limit(1)
+        )
+        senior_id = result.scalar_one_or_none()
+    
+    # Crear respuesta con senior_id si aplica
+    user_data = UserPublic.model_validate(user)
+    user_data.senior_id = senior_id
+    return user_data
 
 
 @router.get("/users", response_model=list[UserPublic])

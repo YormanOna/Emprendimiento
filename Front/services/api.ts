@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 // Detectar el entorno y usar la URL correcta
 const getBaseURL = () => {
   // Si estás en desarrollo, usa la IP de tu máquina
-  const LOCAL_IP = '10.202.30.189'; // Tu IP local
+  const LOCAL_IP = '192.168.100.43'; // Tu IP local
   
   if (__DEV__) {
     if (Platform.OS === 'android') {

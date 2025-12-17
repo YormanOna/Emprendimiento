@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +70,11 @@ export default function LoginScreen() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <Ionicons name="heart" size={48} color="white" />
+              <Image 
+                source={require('../image/logo.png')} 
+                style={styles.logo}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>Cuidado Mayor</Text>
             <Text style={styles.subtitle}>Bienvenido de vuelta</Text>
@@ -163,10 +168,23 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   iconContainer: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#ffffff',
     borderRadius: 50,
-    padding: 16,
+    padding: 20,
     marginBottom: 16,
+    width: 130,
+    height: 130,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  logo: {
+    width: 120,
+    height: 120,
   },
   title: {
     fontSize: 30,

@@ -27,5 +27,11 @@ class Reminder(TimestampMixin, Base):
 
     status: Mapped[ReminderStatus] = mapped_column(Enum(ReminderStatus), default=ReminderStatus.PENDING, nullable=False)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Referencia opcional a medicamento (para recordatorios automáticos)
+    medication_id: Mapped[int | None] = mapped_column(ForeignKey("medications.id"), nullable=True, index=True)
+    
+    # Campo de compatibilidad con el esquema anterior
+    is_completed: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)

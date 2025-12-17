@@ -32,6 +32,7 @@ class UserRole(str, enum.Enum):
 
 
 class MembershipRole(str, enum.Enum):
+    SELF = "SELF"
     DOCTOR = "DOCTOR"
     CAREGIVER = "CAREGIVER"
     FAMILY = "FAMILY"

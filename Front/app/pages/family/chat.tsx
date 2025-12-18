@@ -1,6 +1,18 @@
 // app/pages/family/chat.tsx
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  KeyboardAvoidingView, 
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import chatService, { Message, ChatWebSocket } from '@/services/chatService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -53,67 +65,107 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = inputText.trim();
     if (!trimmed) return;
 
-    if (wsRef.current) {
-      wsRef.current.sendMessage(trimmed);
-      setInputText('');
+    // Si el WebSocket no está conectado, intentar enviar por HTTP
+    if (wsRef.current && wsRef.current.sendMessage) {
+      try {
+        wsRef.current.sendMessage(trimmed);
+      } catch (error) {
+        console.warn('WebSocket falló, usando HTTP...');
+        await sendViaHttp(trimmed);
+      }
+    } else {
+      await sendViaHttp(trimmed);
+    }
+    
+    setInputText('');
+  };
+
+  const sendViaHttp = async (content: string) => {
+    const newMsg = await chatService.sendMessage(conversationId, content);
+    if (newMsg) {
+      setMessages(prev => [...prev, newMsg]);
+      setTimeout(() => scrollToBottom(), 100);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={90}
-    >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>CHAT</Text>
-        <Text style={styles.subtitle}>FAMILIA</Text>
-      </View>
-
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollToBottom()}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {messages.map((msg) => {
-          const isMe = msg.sender_user_id === currentUserId;
-          return (
-            <View
-              key={msg.id}
-              style={[
-                styles.messageBubble,
-                isMe ? styles.myMessage : styles.theirMessage,
-              ]}
-            >
-              <Text style={isMe ? styles.myMessageText : styles.theirMessageText}>
-                {msg.content}
-              </Text>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Chat</Text>
+          <Text style={styles.subtitle}>Conversación con el equipo médico</Text>
+        </View>
+
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() => scrollToBottom()}
+          keyboardShouldPersistTaps="handled"
+        >
+          {messages.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubbles-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyText}>No hay mensajes aún</Text>
+              <Text style={styles.emptySubtext}>Inicia la conversación</Text>
             </View>
-          );
-        })}
-      </ScrollView>
+          ) : (
+            messages.map((msg) => {
+              const isMe = msg.sender_user_id === currentUserId;
+              return (
+                <View
+                  key={msg.id}
+                  style={[
+                    styles.messageBubble,
+                    isMe ? styles.myMessage : styles.theirMessage,
+                  ]}
+                >
+                  {!isMe && msg.sender_name && (
+                    <Text style={styles.senderName}>{msg.sender_name}</Text>
+                  )}
+                  <Text style={isMe ? styles.myMessageText : styles.theirMessageText}>
+                    {msg.content}
+                  </Text>
+                  <Text style={styles.messageTime}>
+                    {new Date(msg.sent_at).toLocaleTimeString('es-ES', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
 
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Type your message..."
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          maxLength={500}
-        />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-          <View style={styles.sendButtonInner} />
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.footer}>© 2023 Application</Text>
-    </KeyboardAvoidingView>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Escribe un mensaje..."
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            maxLength={500}
+            onSubmitEditing={handleSend}
+          />
+          <TouchableOpacity 
+            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
+            onPress={handleSend}
+            disabled={!inputText.trim()}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -123,21 +175,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    padding: 20,
+    padding: 16,
     paddingTop: 50,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    alignItems: 'center',
+    backgroundColor: '#ec4899',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#000',
-    letterSpacing: 1,
+    color: '#fff',
   },
   subtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#fce7f3',
     marginTop: 4,
   },
   messagesContainer: {
@@ -146,33 +197,68 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     padding: 16,
+    flexGrow: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 4,
   },
   messageBubble: {
-    maxWidth: '75%',
+    maxWidth: '80%',
     padding: 12,
     borderRadius: 16,
     marginBottom: 12,
   },
   myMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#fbcfe8',
+    backgroundColor: '#ec4899',
   },
   theirMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  senderName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginBottom: 4,
   },
   myMessageText: {
-    color: '#9f1239',
+    color: '#fff',
     fontSize: 15,
+    lineHeight: 20,
   },
   theirMessageText: {
     color: '#374151',
     fontSize: 15,
+    lineHeight: 20,
+  },
+  messageTime: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
+    alignSelf: 'flex-end',
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     padding: 12,
+    paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     backgroundColor: '#fff',
@@ -188,31 +274,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#ec4899',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendButtonInner: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 8,
-    borderRightWidth: 0,
-    borderTopWidth: 5,
-    borderBottomWidth: 5,
-    borderLeftColor: '#fff',
-    borderRightColor: 'transparent',
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    marginLeft: 2,
-  },
-  footer: {
-    textAlign: 'center',
-    paddingVertical: 8,
-    fontSize: 12,
-    color: '#9ca3af',
-    backgroundColor: '#fff',
+  sendButtonDisabled: {
+    backgroundColor: '#d1d5db',
   },
 });

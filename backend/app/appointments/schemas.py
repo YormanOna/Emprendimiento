@@ -27,14 +27,22 @@ class AppointmentCreate(BaseModel):
         description="Notas adicionales"
     )
 
-    @field_validator("scheduled_at", "starts_at")
+    @field_validator("scheduled_at", "starts_at", mode='before')
     @classmethod
-    def validate_future_date(cls, v):
+    def parse_datetime(cls, v):
         if v is None:
             return v
-        from datetime import datetime, timezone
-        if v < datetime.now(timezone.utc):
-            raise ValueError("La cita debe ser en el futuro")
+        if isinstance(v, str):
+            from datetime import datetime, timezone
+            # Parsear el string a datetime
+            try:
+                dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
+                # Si no tiene timezone, asignar UTC
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except:
+                raise ValueError("Formato de fecha inválido")
         return v
 
 class AppointmentPublic(BaseModel):
@@ -43,8 +51,8 @@ class AppointmentPublic(BaseModel):
     doctor_user_id: Optional[int] = None
     doctor_name: Optional[str] = None
     specialty: Optional[str] = None
-    scheduled_at: datetime
-    starts_at: Optional[datetime] = None
+    starts_at: datetime
+    scheduled_at: Optional[datetime] = None
     location: Optional[str] = None
     reason: Optional[str] = None
     notes: Optional[str] = None

@@ -26,16 +26,42 @@ export default function FamilyDashboard() {
   }, []);
 
   const loadData = async () => {
-    const userData = await authService.getCurrentUser();
-    setUser(userData);
-    
-    // Obtener seniors asignados a este familiar
-    const seniorsData = await seniorsService.getSeniors();
-    setSeniors(seniorsData);
-    
-    // Seleccionar el primer senior por defecto
-    if (seniorsData.length > 0) {
-      setSelectedSenior(seniorsData[0]);
+    try {
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+      console.log('👤 Usuario actual:', userData?.full_name, userData?.id);
+      
+      // Obtener seniors asignados a este familiar
+      const seniorsData = await seniorsService.getSeniors();
+      console.log('📋 Total de seniors:', seniorsData.length);
+      
+      // Filtrar solo los seniors donde el usuario es miembro del care team
+      const mySeniors: Senior[] = [];
+      for (const senior of seniorsData) {
+        const team = await seniorsService.getTeam(senior.id);
+        console.log(`👥 Care team de ${senior.full_name}:`, team.length, 'miembros');
+        const isMember = team.some(member => member.user_id === userData?.id);
+        if (isMember) {
+          console.log(`✅ Usuario es miembro del care team de ${senior.full_name}`);
+          mySeniors.push(senior);
+        } else {
+          console.log(`❌ Usuario NO es miembro del care team de ${senior.full_name}`);
+        }
+      }
+      
+      console.log('🏥 Seniors asignados:', mySeniors.length);
+      setSeniors(mySeniors);
+      
+      // Seleccionar el primer senior por defecto
+      if (mySeniors.length > 0) {
+        setSelectedSenior(mySeniors[0]);
+        console.log('✅ Senior seleccionado:', mySeniors[0].full_name);
+      } else {
+        setSelectedSenior(null);
+        console.log('⚠️ No hay seniors asignados');
+      }
+    } catch (error) {
+      console.error('❌ Error cargando datos:', error);
     }
   };
 
@@ -57,16 +83,33 @@ export default function FamilyDashboard() {
       return;
     }
     
+    if (seniors.length === 1) {
+      Alert.alert('Solo hay un adulto mayor', 'Solo tienes un adulto mayor asignado a tu cuidado.');
+      return;
+    }
+    
+    const options = [
+      ...seniors.map((senior) => senior.full_name),
+      'Cancelar'
+    ];
+    
     Alert.alert(
       'Seleccionar Adulto Mayor',
-      'Elige el familiar que deseas monitorear',
-      [
-        ...seniors.map((senior) => ({
-          text: senior.full_name,
-          onPress: () => setSelectedSenior(senior),
-        })),
-        { text: 'Cancelar', style: 'cancel' },
-      ]
+      'Elige el familiar que deseas monitorear:',
+      options.map((option, index) => {
+        if (index === options.length - 1) {
+          return { text: option, style: 'cancel' };
+        }
+        return {
+          text: option,
+          onPress: () => {
+            const selected = seniors[index];
+            console.log('Senior seleccionado:', selected);
+            setSelectedSenior(selected);
+            Alert.alert('Selección actualizada', `Ahora estás monitoreando a ${selected.full_name}`);
+          }
+        };
+      })
     );
   };
 

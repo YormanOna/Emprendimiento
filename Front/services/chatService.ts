@@ -78,6 +78,8 @@ export class ChatWebSocket {
   private onMessage: (message: Message) => void;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private shouldReconnect = true;
+  private hasConnectedOnce = false;
 
   constructor(
     conversationId: number,
@@ -90,13 +92,18 @@ export class ChatWebSocket {
   }
 
   connect() {
-    const wsUrl = `ws://192.168.100.17:8000/ws/conversations/${this.conversationId}?token=${this.token}`;
+    // Obtener la URL base del API y convertirla a WebSocket
+    const apiUrl = 'http://192.168.100.43:8000'; // Misma IP que la API REST
+    const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+    const fullWsUrl = `${wsUrl}/ws/conversations/${this.conversationId}?token=${this.token}`;
     
-    this.ws = new WebSocket(wsUrl);
+    console.log('🔌 Intentando conectar WebSocket:', fullWsUrl);
+    this.ws = new WebSocket(fullWsUrl);
 
     this.ws.onopen = () => {
-      console.log('WebSocket conectado');
+      console.log('✅ WebSocket conectado exitosamente');
       this.reconnectAttempts = 0;
+      this.hasConnectedOnce = true;
     };
 
     this.ws.onmessage = (event) => {
@@ -117,18 +124,23 @@ export class ChatWebSocket {
     };
 
     this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      // Solo mostrar advertencia si nunca se conectó (servidor no disponible)
+      if (!this.hasConnectedOnce && this.reconnectAttempts === 0) {
+        console.warn('⚠️ No se pudo conectar al chat. El servidor WebSocket no está disponible.');
+      }
     };
 
     this.ws.onclose = () => {
-      console.log('WebSocket cerrado');
-      // Intentar reconexión
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      // Solo reintentar si ya se había conectado anteriormente (desconexión inesperada)
+      // No reintentar si nunca se conectó (servidor no disponible)
+      if (this.hasConnectedOnce && this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
         setTimeout(() => {
           this.reconnectAttempts++;
-          console.log(`Reconectando... Intento ${this.reconnectAttempts}`);
+          console.log(`🔄 Reintentando conexión WebSocket... Intento ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
           this.connect();
-        }, 2000 * this.reconnectAttempts);
+        }, 3000 * this.reconnectAttempts);
+      } else if (!this.hasConnectedOnce && this.reconnectAttempts === 0) {
+        console.log('ℹ️ Chat no disponible. Necesitas iniciar el servidor backend para usar esta función.');
       }
     };
   }
@@ -142,6 +154,7 @@ export class ChatWebSocket {
   }
 
   disconnect() {
+    this.shouldReconnect = false; // Evitar reconexión automática
     if (this.ws) {
       this.ws.close();
       this.ws = null;

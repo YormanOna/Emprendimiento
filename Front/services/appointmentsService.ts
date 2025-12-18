@@ -7,8 +7,8 @@ export interface Appointment {
   doctor_user_id?: number;
   doctor_name?: string;
   specialty?: string;
-  scheduled_at: string; // Alias para starts_at
-  starts_at?: string;
+  starts_at: string;
+  scheduled_at?: string; // Alias para starts_at (opcional)
   ends_at?: string;
   location?: string;
   reason?: string;

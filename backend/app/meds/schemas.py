@@ -7,7 +7,6 @@ from app.meds.models import IntakeStatus
 
 
 class MedicationCreate(BaseModel):
-    senior_id: int
     name: str = Field(min_length=1, max_length=120)
     dose: str = Field(min_length=1, max_length=40)
     unit: str = Field(min_length=1, max_length=20)
@@ -34,7 +33,6 @@ class MedicationPublic(BaseModel):
 
 
 class MedicationScheduleCreate(BaseModel):
-    medication_id: int = Field(gt=0, description="ID del medicamento")
     start_date: Optional[date] = Field(None, description="Fecha de inicio del horario")
     end_date: Optional[date] = Field(None, description="Fecha de fin del horario")
     hours: List[int] = Field(

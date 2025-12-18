@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.chat.models import Conversation, Message
 
 
-async def create_conversation(db: AsyncSession, senior_id: int, doctor_user_id: int) -> Conversation:
+async def create_conversation(db: AsyncSession, senior_id: int, doctor_user_id: int | None = None) -> Conversation:
     conv = Conversation(senior_id=senior_id, doctor_user_id=doctor_user_id, status="OPEN")
     db.add(conv)
     await db.flush()

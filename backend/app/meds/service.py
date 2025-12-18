@@ -38,13 +38,12 @@ async def create_medication_reminders(db: AsyncSession, medication: Medication, 
     if not schedule.hours:
         return
     
-    # Fecha de inicio (hoy si no se especifica)
-    start = schedule.start_date or date.today()
-    # Fecha fin (30 días si no se especifica)
-    end = schedule.end_date or (start + timedelta(days=30))
+    # Fecha de inicio (siempre hoy)
+    start = date.today()
+    # Fecha fin (7 días desde hoy si no se especifica)
+    end = schedule.end_date or (start + timedelta(days=7))
     
     # Crear recordatorios para los próximos días
-    current_date = start
     days_to_create = min(7, (end - start).days + 1)  # Crear para 7 días o hasta el final
     
     for day_offset in range(days_to_create):
@@ -59,17 +58,16 @@ async def create_medication_reminders(db: AsyncSession, medication: Medication, 
         for hour in schedule.hours:
             scheduled_datetime = datetime.combine(current_date, time(hour=hour))
             
-            # Solo crear si es en el futuro
-            if scheduled_datetime > datetime.now():
-                reminder = Reminder(
-                    senior_id=medication.senior_id,
-                    title=f"Tomar {medication.name}",
-                    description=f"Dosis: {medication.dose} {medication.unit}. {medication.notes or ''}",
-                    scheduled_at=scheduled_datetime,
-                    is_completed=False,
-                    medication_id=medication.id
-                )
-                db.add(reminder)
+            # Crear recordatorio incluso si la hora ya pasó (se mostrará como atrasado)
+            reminder = Reminder(
+                senior_id=medication.senior_id,
+                title=f"Tomar {medication.name}",
+                description=f"Dosis: {medication.dose} {medication.unit}. {medication.notes or ''}",
+                scheduled_at=scheduled_datetime,
+                is_completed=False,
+                medication_id=medication.id
+            )
+            db.add(reminder)
     
     await db.flush()
 

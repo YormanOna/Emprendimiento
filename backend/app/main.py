@@ -75,6 +75,11 @@ async def create_default_users():
             },
         ]
         
+        # Crear usuarios y vincular perfiles de senior automáticamente
+        from app.seniors.models import SeniorProfile, CareTeam, MembershipRole
+        from datetime import date
+        
+        created_users = {}
         for user_data in default_users:
             user = User(
                 full_name=user_data["full_name"],
@@ -84,24 +89,38 @@ async def create_default_users():
                 is_active=user_data["is_active"],
             )
             db.add(user)
+            await db.flush()  # Obtiene el user.id
+            created_users[user.email] = user
+            
+            # Si es SENIOR, crear automáticamente su perfil y vinculación
+            if user_data["role"] == UserRole.SENIOR:
+                senior_profile = SeniorProfile(
+                    full_name=user.full_name,
+                    birthdate=date(1950, 5, 15),
+                    conditions="Diabetes tipo 2, Hipertensión",
+                    emergency_contact_name="Contacto de Emergencia",
+                    emergency_contact_phone="555-0100",
+                )
+                db.add(senior_profile)
+                await db.flush()  # Obtiene el senior_profile.id
+                
+                # Vincular en care_team con rol SELF
+                care_team = CareTeam(
+                    senior_id=senior_profile.id,
+                    user_id=user.id,
+                    membership_role=MembershipRole.SELF,
+                    can_view=True,
+                    can_edit=True
+                )
+                db.add(care_team)
         
         await db.commit()
         print(f"✅ Se crearon {len(default_users)} usuarios por defecto:")
         for user_data in default_users:
             print(f"   - {user_data['email']} ({user_data['role'].value})")
         
-        # Crear seniors de ejemplo
-        from app.seniors.models import SeniorProfile
-        from datetime import date
-        
+        # Crear seniors adicionales de ejemplo (no vinculados a usuarios)
         default_seniors = [
-            {
-                "full_name": "Rosa Martínez",
-                "birthdate": date(1950, 5, 15),
-                "conditions": "Diabetes tipo 2, Hipertensión",
-                "emergency_contact_name": "María García",
-                "emergency_contact_phone": "555-0102",
-            },
             {
                 "full_name": "Juan López",
                 "birthdate": date(1948, 8, 20),
@@ -116,7 +135,7 @@ async def create_default_users():
             db.add(senior)
         
         await db.commit()
-        print(f"✅ Se crearon {len(default_seniors)} seniors de ejemplo")
+        print(f"✅ Se crearon {len(default_seniors)} seniors adicionales de ejemplo")
 
 
 @app.on_event("startup")

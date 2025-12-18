@@ -36,5 +36,33 @@ async def mark_done(db: AsyncSession, reminder_id: int, actor_user_id: int) -> R
     r.status = ReminderStatus.DONE
     r.done_at = datetime.now(timezone.utc)
     r.actor_user_id = actor_user_id
+    
+    # Si el recordatorio está asociado a un medicamento, crear un IntakeLog
+    if r.medication_id:
+        from app.meds.models import IntakeLog, IntakeStatus
+        
+        now = datetime.now(timezone.utc)
+        scheduled = r.scheduled_at
+        
+        # Asegurar que scheduled tenga timezone para la comparación
+        if scheduled.tzinfo is None:
+            scheduled = scheduled.replace(tzinfo=timezone.utc)
+        
+        # Determinar el estado según cuándo se tomó
+        if now > scheduled + timedelta(hours=1):
+            status = IntakeStatus.LATE
+        else:
+            status = IntakeStatus.TAKEN
+        
+        intake = IntakeLog(
+            senior_id=r.senior_id,
+            medication_id=r.medication_id,
+            scheduled_at=scheduled,
+            taken_at=now,
+            status=status,
+            actor_user_id=actor_user_id
+        )
+        db.add(intake)
+    
     await db.flush()
     return r

@@ -9,6 +9,8 @@ import {
   TextInput,
   Alert,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -26,8 +28,59 @@ export default function SeniorMedicationsManageScreen() {
     dose: '',
     unit: 'mg',
     notes: '',
-    hours: '',
   });
+  const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const [selectedDays, setSelectedDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]); // Todos los días por defecto
+  const [currentStep, setCurrentStep] = useState(1); // Paso actual del wizard
+
+  const daysOfWeek = [
+    { day: 0, label: 'Lunes', short: 'L' },
+    { day: 1, label: 'Martes', short: 'M' },
+    { day: 2, label: 'Miércoles', short: 'X' },
+    { day: 3, label: 'Jueves', short: 'J' },
+    { day: 4, label: 'Viernes', short: 'V' },
+    { day: 5, label: 'Sábado', short: 'S' },
+    { day: 6, label: 'Domingo', short: 'D' },
+  ];
+
+  const commonHours = [
+    { hour: 6, label: '6:00 AM\n(Desayuno)' },
+    { hour: 8, label: '8:00 AM\n(Mañana)' },
+    { hour: 12, label: '12:00 PM\n(Almuerzo)' },
+    { hour: 14, label: '2:00 PM\n(Tarde)' },
+    { hour: 18, label: '6:00 PM\n(Cena)' },
+    { hour: 20, label: '8:00 PM\n(Noche)' },
+    { hour: 22, label: '10:00 PM\n(Antes de dormir)' },
+  ];
+
+  const toggleHour = (hour: number) => {
+    if (selectedHours.includes(hour)) {
+      setSelectedHours(selectedHours.filter(h => h !== hour));
+    } else {
+      setSelectedHours([...selectedHours, hour].sort((a, b) => a - b));
+    }
+  };
+
+  const toggleDay = (day: number) => {
+    if (selectedDays.includes(day)) {
+      // No permitir deseleccionar todos los días
+      if (selectedDays.length > 1) {
+        setSelectedDays(selectedDays.filter(d => d !== day));
+      } else {
+        Alert.alert('Atención', 'Debes seleccionar al menos un día');
+      }
+    } else {
+      setSelectedDays([...selectedDays, day].sort((a, b) => a - b));
+    }
+  };
+
+  const toggleAllDays = () => {
+    if (selectedDays.length === 7) {
+      setSelectedDays([0]); // Dejar solo lunes
+    } else {
+      setSelectedDays([0, 1, 2, 3, 4, 5, 6]); // Seleccionar todos
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -75,24 +128,51 @@ export default function SeniorMedicationsManageScreen() {
       }
 
       // Crear horarios si se especificaron
-      if (newMed.hours) {
-        const hours = newMed.hours.split(',').map(h => parseInt(h.trim())).filter(h => !isNaN(h));
-        if (hours.length > 0) {
-          await medicationsService.createSchedule(medication.id, {
-            hours: hours,
-            days_of_week: [0, 1, 2, 3, 4, 5, 6], // Todos los días
-          });
-        }
+      if (selectedHours.length > 0) {
+        await medicationsService.createSchedule(medication.id, {
+          hours: selectedHours,
+          days_of_week: selectedDays,
+        });
       }
 
       Alert.alert('Éxito', 'Medicamento agregado correctamente');
       setModalVisible(false);
-      setNewMed({ name: '', dose: '', unit: 'mg', notes: '', hours: '' });
+      setNewMed({ name: '', dose: '', unit: 'mg', notes: '' });
+      setSelectedHours([]);
+      setSelectedDays([0, 1, 2, 3, 4, 5, 6]); // Reset a todos los días
+      setCurrentStep(1); // Reset al paso 1
       await loadData();
     } catch (error) {
       console.error('Error al agregar medicamento:', error);
       Alert.alert('Error', 'No se pudo agregar el medicamento');
     }
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!newMed.name || !newMed.dose || !newMed.unit) {
+        Alert.alert('Campos incompletos', 'Por favor completa el nombre, dosis y unidad del medicamento');
+        return;
+      }
+    } else if (currentStep === 2) {
+      if (selectedHours.length === 0) {
+        Alert.alert('Selecciona al menos una hora', 'Debes elegir al menos un horario para tomar el medicamento');
+        return;
+      }
+    }
+    setCurrentStep(currentStep + 1);
+  };
+
+  const handlePreviousStep = () => {
+    setCurrentStep(currentStep - 1);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setCurrentStep(1);
+    setNewMed({ name: '', dose: '', unit: 'mg', notes: '' });
+    setSelectedHours([]);
+    setSelectedDays([0, 1, 2, 3, 4, 5, 6]);
   };
 
   const handleDeleteMedication = async (medId: number) => {
@@ -142,7 +222,11 @@ export default function SeniorMedicationsManageScreen() {
       >
         {medications.length > 0 ? (
           medications.map((med) => (
-            <View key={med.id} style={styles.medCard}>
+            <TouchableOpacity 
+              key={med.id} 
+              style={styles.medCard}
+              onPress={() => router.push(`/pages/senior/medication-detail?id=${med.id}`)}
+            >
               <View style={styles.medIcon}>
                 <Ionicons name="medical" size={28} color="#8b5cf6" />
               </View>
@@ -153,13 +237,19 @@ export default function SeniorMedicationsManageScreen() {
                 </Text>
                 {med.notes && <Text style={styles.medNotes}>{med.notes}</Text>}
               </View>
-              <TouchableOpacity
-                onPress={() => handleDeleteMedication(med.id)}
-                style={styles.deleteButton}
-              >
-                <Ionicons name="trash-outline" size={22} color="#ef4444" />
-              </TouchableOpacity>
-            </View>
+              <View style={styles.medActions}>
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeleteMedication(med.id);
+                  }}
+                  style={styles.deleteButton}
+                >
+                  <Ionicons name="trash-outline" size={22} color="#ef4444" />
+                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
+              </View>
+            </TouchableOpacity>
           ))
         ) : (
           <View style={styles.emptyState}>
@@ -175,67 +265,359 @@ export default function SeniorMedicationsManageScreen() {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+          >
+            <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nuevo Medicamento</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <View>
+                <Text style={styles.modalTitle}>Nuevo Medicamento</Text>
+                <Text style={styles.stepIndicator}>Paso {currentStep} de 4</Text>
+              </View>
+              <TouchableOpacity onPress={handleCloseModal}>
                 <Ionicons name="close-circle" size={28} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm}>
-              <Text style={styles.label}>Nombre *</Text>
-              <TextInput
-                style={styles.input}
-                value={newMed.name}
-                onChangeText={(text) => setNewMed({ ...newMed, name: text })}
-                placeholder="Ej: Losartán"
-              />
+            {/* Indicador de progreso */}
+            <View style={styles.progressContainer}>
+              {[1, 2, 3, 4].map((step) => (
+                <View key={step} style={styles.progressStepWrapper}>
+                  <View
+                    style={[
+                      styles.progressStep,
+                      currentStep >= step && styles.progressStepActive,
+                      currentStep > step && styles.progressStepCompleted,
+                    ]}
+                  >
+                    {currentStep > step ? (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.progressStepText,
+                          currentStep >= step && styles.progressStepTextActive,
+                        ]}
+                      >
+                        {step}
+                      </Text>
+                    )}
+                  </View>
+                  {step < 4 && (
+                    <View
+                      style={[
+                        styles.progressLine,
+                        currentStep > step && styles.progressLineActive,
+                      ]}
+                    />
+                  )}
+                </View>
+              ))}
+            </View>
 
-              <Text style={styles.label}>Dosis *</Text>
-              <TextInput
-                style={styles.input}
-                value={newMed.dose}
-                onChangeText={(text) => setNewMed({ ...newMed, dose: text })}
-                placeholder="Ej: 50"
-                keyboardType="numeric"
-              />
+            <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
+              {/* PASO 1: Datos del medicamento */}
+              {currentStep === 1 && (
+                <View style={styles.stepContainer}>
+                  <View style={styles.stepHeader}>
+                    <View style={styles.stepIconCircle}>
+                      <Ionicons name="medical" size={32} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.stepTitle}>Información Básica</Text>
+                    <Text style={styles.stepDescription}>
+                      Ingresa el nombre y dosis del medicamento
+                    </Text>
+                  </View>
 
-              <Text style={styles.label}>Unidad *</Text>
-              <TextInput
-                style={styles.input}
-                value={newMed.unit}
-                onChangeText={(text) => setNewMed({ ...newMed, unit: text })}
-                placeholder="Ej: mg, ml, tabletas"
-              />
+                  <Text style={styles.label}>Nombre del Medicamento *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newMed.name}
+                    onChangeText={(text) => setNewMed({ ...newMed, name: text })}
+                    placeholder="Ej: Losartán"
+                    placeholderTextColor="#94a3b8"
+                  />
 
-              <Text style={styles.label}>Horarios (opcional)</Text>
-              <TextInput
-                style={styles.input}
-                value={newMed.hours}
-                onChangeText={(text) => setNewMed({ ...newMed, hours: text })}
-                placeholder="Ej: 8,14,20 (separados por comas)"
-                keyboardType="numeric"
-              />
+                  <Text style={styles.label}>Dosis *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newMed.dose}
+                    onChangeText={(text) => setNewMed({ ...newMed, dose: text })}
+                    placeholder="Ej: 50"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                  />
 
-              <Text style={styles.label}>Notas (opcional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newMed.notes}
-                onChangeText={(text) => setNewMed({ ...newMed, notes: text })}
-                placeholder="Ej: Tomar con alimentos"
-                multiline
-                numberOfLines={3}
-              />
+                  <Text style={styles.label}>Unidad de Medida *</Text>
+                  <View style={styles.unitButtonsContainer}>
+                    {['mg', 'ml', 'tabletas', 'cápsulas', 'gotas'].map((unit) => (
+                      <TouchableOpacity
+                        key={unit}
+                        style={[
+                          styles.unitButton,
+                          newMed.unit === unit && styles.unitButtonSelected,
+                        ]}
+                        onPress={() => setNewMed({ ...newMed, unit })}
+                      >
+                        <Text
+                          style={[
+                            styles.unitButtonText,
+                            newMed.unit === unit && styles.unitButtonTextSelected,
+                          ]}
+                        >
+                          {unit}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* PASO 2: Selección de horas */}
+              {currentStep === 2 && (
+                <View style={styles.stepContainer}>
+                  <View style={styles.stepHeader}>
+                    <View style={styles.stepIconCircle}>
+                      <Ionicons name="time" size={32} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.stepTitle}>Horarios de Toma</Text>
+                    <Text style={styles.stepDescription}>
+                      Selecciona una o más horas del día
+                    </Text>
+                  </View>
+
+                  <View style={styles.hoursGrid}>
+                    {commonHours.map(({ hour, label }) => (
+                      <TouchableOpacity
+                        key={hour}
+                        style={[
+                          styles.hourButton,
+                          selectedHours.includes(hour) && styles.hourButtonSelected,
+                        ]}
+                        onPress={() => toggleHour(hour)}
+                      >
+                        <Ionicons
+                          name={selectedHours.includes(hour) ? 'checkmark-circle' : 'time-outline'}
+                          size={36}
+                          color={selectedHours.includes(hour) ? '#fff' : '#8b5cf6'}
+                        />
+                        <Text
+                          style={[
+                            styles.hourButtonText,
+                            selectedHours.includes(hour) && styles.hourButtonTextSelected,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {selectedHours.length > 0 && (
+                    <View style={styles.selectionSummary}>
+                      <Ionicons name="alarm" size={22} color="#8b5cf6" />
+                      <Text style={styles.selectionSummaryText}>
+                        {selectedHours.length} {selectedHours.length === 1 ? 'hora seleccionada' : 'horas seleccionadas'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* PASO 3: Selección de días */}
+              {currentStep === 3 && (
+                <View style={styles.stepContainer}>
+                  <View style={styles.stepHeader}>
+                    <View style={styles.stepIconCircle}>
+                      <Ionicons name="calendar" size={32} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.stepTitle}>Días de la Semana</Text>
+                    <Text style={styles.stepDescription}>
+                      ¿Qué días tomas este medicamento?
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity style={styles.allDaysButton} onPress={toggleAllDays}>
+                    <Ionicons
+                      name={selectedDays.length === 7 ? 'checkbox' : 'square-outline'}
+                      size={26}
+                      color="#8b5cf6"
+                    />
+                    <Text style={styles.allDaysText}>Todos los días</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.daysGridWizard}>
+                    {daysOfWeek.map(({ day, label, short }) => (
+                      <TouchableOpacity
+                        key={day}
+                        style={[
+                          styles.dayButtonWizard,
+                          selectedDays.includes(day) && styles.dayButtonWizardSelected,
+                        ]}
+                        onPress={() => toggleDay(day)}
+                      >
+                        <Text
+                          style={[
+                            styles.dayButtonShortWizard,
+                            selectedDays.includes(day) && styles.dayButtonTextWizardSelected,
+                          ]}
+                        >
+                          {short}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.dayButtonLabelWizard,
+                            selectedDays.includes(day) && styles.dayButtonTextWizardSelected,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                        {selectedDays.includes(day) && (
+                          <View style={styles.dayCheckmark}>
+                            <Ionicons name="checkmark" size={18} color="#fff" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {selectedDays.length > 0 && (
+                    <View style={styles.selectionSummary}>
+                      <Ionicons name="calendar" size={22} color="#8b5cf6" />
+                      <Text style={styles.selectionSummaryText}>
+                        {selectedDays.length} {selectedDays.length === 1 ? 'día seleccionado' : 'días seleccionados'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* PASO 4: Notas y confirmación */}
+              {currentStep === 4 && (
+                <View style={styles.stepContainer}>
+                  <View style={styles.stepHeader}>
+                    <View style={styles.stepIconCircle}>
+                      <Ionicons name="document-text" size={32} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.stepTitle}>Notas y Confirmación</Text>
+                    <Text style={styles.stepDescription}>
+                      Agrega información adicional (opcional)
+                    </Text>
+                  </View>
+
+                  <Text style={styles.label}>Notas o Instrucciones</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={newMed.notes}
+                    onChangeText={(text) => setNewMed({ ...newMed, notes: text })}
+                    placeholder="Ej: Tomar con alimentos, evitar lácteos, etc."
+                    placeholderTextColor="#94a3b8"
+                    multiline
+                    numberOfLines={4}
+                  />
+
+                  {/* Resumen */}
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryTitle}>Resumen del Medicamento</Text>
+                    
+                    <View style={styles.summaryRow}>
+                      <Ionicons name="medical" size={20} color="#8b5cf6" />
+                      <View style={styles.summaryContent}>
+                        <Text style={styles.summaryLabel}>Medicamento</Text>
+                        <Text style={styles.summaryValue}>{newMed.name}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.summaryRow}>
+                      <Ionicons name="flask" size={20} color="#8b5cf6" />
+                      <View style={styles.summaryContent}>
+                        <Text style={styles.summaryLabel}>Dosis</Text>
+                        <Text style={styles.summaryValue}>
+                          {newMed.dose} {newMed.unit}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.summaryRow}>
+                      <Ionicons name="time" size={20} color="#8b5cf6" />
+                      <View style={styles.summaryContent}>
+                        <Text style={styles.summaryLabel}>Horarios</Text>
+                        <Text style={styles.summaryValue}>
+                          {selectedHours.length > 0
+                            ? selectedHours
+                                .map((h) => {
+                                  const hour12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+                                  const period = h >= 12 ? 'PM' : 'AM';
+                                  return `${hour12}:00 ${period}`;
+                                })
+                                .join(', ')
+                            : 'No seleccionado'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.summaryRow}>
+                      <Ionicons name="calendar" size={20} color="#8b5cf6" />
+                      <View style={styles.summaryContent}>
+                        <Text style={styles.summaryLabel}>Días</Text>
+                        <Text style={styles.summaryValue}>
+                          {selectedDays.length === 7
+                            ? 'Todos los días'
+                            : selectedDays
+                                .map((d) => daysOfWeek.find((day) => day.day === d)?.short)
+                                .join(', ')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {newMed.notes && (
+                      <View style={styles.summaryRow}>
+                        <Ionicons name="information-circle" size={20} color="#8b5cf6" />
+                        <View style={styles.summaryContent}>
+                          <Text style={styles.summaryLabel}>Notas</Text>
+                          <Text style={styles.summaryValue}>{newMed.notes}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleAddMedication}>
-              <Text style={styles.saveButtonText}>Guardar Medicamento</Text>
-            </TouchableOpacity>
+            {/* Botones de navegación */}
+            <View style={styles.navigationButtons}>
+              {currentStep > 1 && (
+                <TouchableOpacity
+                  style={styles.backButtonNav}
+                  onPress={handlePreviousStep}
+                >
+                  <Ionicons name="arrow-back" size={20} color="#8b5cf6" />
+                  <Text style={styles.backButtonText}>Atrás</Text>
+                </TouchableOpacity>
+              )}
+              
+              {currentStep < 4 ? (
+                <TouchableOpacity
+                  style={[styles.nextButton, currentStep === 1 && styles.nextButtonFull]}
+                  onPress={handleNextStep}
+                >
+                  <Text style={styles.nextButtonText}>Siguiente</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.saveButtonFinal, currentStep === 1 && styles.nextButtonFull]}
+                  onPress={handleAddMedication}
+                >
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                  <Text style={styles.saveButtonTextFinal}>Guardar Medicamento</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
+        </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -283,10 +665,13 @@ const styles = StyleSheet.create({
   medName: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 4 },
   medDose: { fontSize: 14, color: '#64748b' },
   medNotes: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginTop: 4 },
+  medActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   deleteButton: { padding: 8 },
   emptyState: { alignItems: 'center', paddingVertical: 80 },
   emptyText: { fontSize: 16, fontWeight: '600', color: '#64748b', marginTop: 16 },
   emptySubtext: { fontSize: 14, color: '#94a3b8', marginTop: 8 },
+  
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -297,33 +682,344 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '90%',
+    height: '92%',
+    flexDirection: 'column',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
-  modalForm: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: '#475569', marginBottom: 8 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
+  stepIndicator: { fontSize: 13, color: '#8b5cf6', fontWeight: '600', marginTop: 2 },
+  
+  // Progress bar
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  progressStepWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressStep: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressStepActive: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#8b5cf6',
+  },
+  progressStepCompleted: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  progressStepText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  progressStepTextActive: {
+    color: '#fff',
+  },
+  progressLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 4,
+  },
+  progressLineActive: {
+    backgroundColor: '#10b981',
+  },
+  
+  // Steps
+  modalForm: {
+    flex: 1,
+  },
+  stepContainer: {
+    paddingBottom: 20,
+    minHeight: 400,
+  },
+  stepHeader: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  stepIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f3e8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 6,
+  },
+  stepDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  
+  // Form elements
+  label: { fontSize: 15, fontWeight: '600', color: '#475569', marginBottom: 10 },
   input: {
     backgroundColor: '#f8fafc',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
+    fontSize: 16,
+    color: '#1e293b',
+    marginBottom: 20,
+  },
+  textArea: { 
+    height: 100, 
+    textAlignVertical: 'top',
+    paddingTop: 16,
+  },
+  
+  // Unit buttons
+  unitButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  unitButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+  },
+  unitButtonSelected: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#7c3aed',
+  },
+  unitButtonText: {
     fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  unitButtonTextSelected: {
+    color: '#fff',
+  },
+  
+  // Hours
+  hoursGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  hourButton: {
+    width: '47%',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 110,
+  },
+  hourButtonSelected: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#7c3aed',
+  },
+  hourButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 10,
+    lineHeight: 20,
+  },
+  hourButtonTextSelected: {
+    color: '#fff',
+  },
+  
+  // Days
+  allDaysButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3e8ff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  allDaysText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#7c3aed',
+  },
+  daysGridWizard: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  dayButtonWizard: {
+    width: '30%',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 90,
+    position: 'relative',
+  },
+  dayButtonWizardSelected: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#7c3aed',
+  },
+  dayButtonShortWizard: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  dayButtonLabelWizard: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  dayButtonTextWizardSelected: {
+    color: '#fff',
+  },
+  dayCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 10,
+    padding: 2,
+  },
+  
+  // Selection summary
+  selectionSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3e8ff',
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  selectionSummaryText: {
+    fontSize: 15,
+    color: '#7c3aed',
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  
+  // Summary card
+  summaryCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  summaryTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 16,
   },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  saveButton: {
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  summaryContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  summaryLabel: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  
+  // Navigation buttons
+  navigationButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 12,
+  },
+  backButtonNav: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#8b5cf6',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  backButtonText: {
+    color: '#8b5cf6',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  nextButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#8b5cf6',
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    gap: 8,
   },
-  saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  nextButtonFull: {
+    flex: 1,
+  },
+  nextButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButtonFinal: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  saveButtonTextFinal: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

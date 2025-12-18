@@ -8,13 +8,10 @@ from app.core.models import Base, TimestampMixin
 
 class Conversation(TimestampMixin, Base):
     __tablename__ = "conversations"
-    __table_args__ = (
-        UniqueConstraint("senior_id", "doctor_user_id", name="uq_conversation_senior_doctor"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     senior_id: Mapped[int] = mapped_column(ForeignKey("seniors.id"), index=True, nullable=False)
-    doctor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    doctor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
 
     status: Mapped[str] = mapped_column(String(20), default="OPEN", nullable=False)
 

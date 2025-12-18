@@ -36,18 +36,24 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def get_user_id_from_ws(ws: WebSocket) -> int:
-    token = ws.query_params.get("token")
-    if not token:
-        raise HTTPException(status_code=4401, detail="Missing token")
-    payload = decode_token(token)
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=4401, detail="Invalid token type")
-    return int(payload["sub"])
-
-
 async def conversations_ws(ws: WebSocket, conversation_id: int):
-    user_id = get_user_id_from_ws(ws)
+    # Primero validar el token ANTES de aceptar la conexión
+    try:
+        token = ws.query_params.get("token")
+        if not token:
+            await ws.close(code=4001, reason="Missing token")
+            return
+        
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await ws.close(code=4001, reason="Invalid token type")
+            return
+        
+        user_id = int(payload["sub"])
+    except Exception as e:
+        print(f"❌ Error validando token WebSocket: {e}")
+        await ws.close(code=4001, reason="Invalid token")
+        return
     
     # Validar autorización: doctor dueño o miembro del care team
     async with AsyncSessionLocal() as db:
@@ -56,23 +62,31 @@ async def conversations_ws(ws: WebSocket, conversation_id: int):
         )
         conv = res.scalar_one_or_none()
         if not conv:
-            await ws.close(code=4404)
+            await ws.close(code=4004, reason="Conversation not found")
             return
 
-        # Doctor dueño
-        if conv.doctor_user_id != user_id:
-            # O miembro del care team
+        # Doctor dueño (si existe) o miembro del care team
+        is_authorized = False
+        if conv.doctor_user_id and conv.doctor_user_id == user_id:
+            is_authorized = True
+        else:
+            # Verificar si es miembro del care team
             cres = await db.execute(
                 select(CareTeam).where(
                     CareTeam.senior_id == conv.senior_id,
                     CareTeam.user_id == user_id,
                 )
             )
-            if not cres.scalar_one_or_none():
-                await ws.close(code=4403)
-                return
+            if cres.scalar_one_or_none():
+                is_authorized = True
+        
+        if not is_authorized:
+            await ws.close(code=4003, reason="Unauthorized")
+            return
     
+    # Ahora sí, aceptar la conexión
     await manager.connect(conversation_id, ws)
+    print(f"✅ WebSocket conectado: user_id={user_id}, conversation_id={conversation_id}")
 
     try:
         while True:
@@ -97,6 +111,8 @@ async def conversations_ws(ws: WebSocket, conversation_id: int):
                 "content": msg.content,
                 "sent_at": msg.sent_at.isoformat(),
             })
+            print(f"📨 Mensaje enviado: user_id={user_id}, content={content[:50]}")
 
     except WebSocketDisconnect:
         manager.disconnect(conversation_id, ws)
+        print(f"🔌 WebSocket desconectado: user_id={user_id}, conversation_id={conversation_id}")

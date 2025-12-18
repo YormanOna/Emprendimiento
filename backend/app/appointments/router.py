@@ -70,7 +70,12 @@ async def list_appointments_endpoint(
     db: AsyncSession = Depends(get_db),
     # _=Depends(require_senior_access),  # Autenticación deshabilitada temporalmente
 ):
-    return await list_appointments(db, senior_id)
+    appointments = await list_appointments(db, senior_id)
+    # Asegurar que scheduled_at tenga valor (usar starts_at si es None)
+    for appt in appointments:
+        if not appt.scheduled_at:
+            appt.scheduled_at = appt.starts_at
+    return appointments
 
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentPublic)

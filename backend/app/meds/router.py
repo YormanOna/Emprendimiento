@@ -47,14 +47,80 @@ async def get_medications_endpoint(
     return await list_medications(db, senior_id)
 
 
+@router.get("/medications/{medication_id}", response_model=MedicationPublic)
+async def get_medication_endpoint(
+    medication_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Obtener detalles de un medicamento específico"""
+    from sqlalchemy import select
+    from app.meds.models import Medication
+    from fastapi import HTTPException
+    
+    result = await db.execute(select(Medication).where(Medication.id == medication_id))
+    medication = result.scalar_one_or_none()
+    if not medication:
+        raise HTTPException(status_code=404, detail="Medication not found")
+    return medication
+
+
+@router.delete("/medications/{medication_id}")
+async def delete_medication_endpoint(
+    medication_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Eliminar un medicamento y sus datos asociados"""
+    from sqlalchemy import select, delete
+    from app.meds.models import Medication, MedicationSchedule, IntakeLog
+    from app.reminders.models import Reminder
+    from fastapi import HTTPException
+    
+    # Verificar que existe
+    result = await db.execute(select(Medication).where(Medication.id == medication_id))
+    medication = result.scalar_one_or_none()
+    if not medication:
+        raise HTTPException(status_code=404, detail="Medication not found")
+    
+    # Eliminar recordatorios asociados (importante: primero los reminders)
+    await db.execute(delete(Reminder).where(Reminder.medication_id == medication_id))
+    
+    # Eliminar logs de toma asociados
+    await db.execute(delete(IntakeLog).where(IntakeLog.medication_id == medication_id))
+    
+    # Eliminar horarios asociados
+    await db.execute(delete(MedicationSchedule).where(MedicationSchedule.medication_id == medication_id))
+    
+    # Eliminar medicamento
+    await db.delete(medication)
+    await db.commit()
+    
+    return {"message": "Medication deleted successfully"}
+
+
+@router.get("/medications/{medication_id}/schedules", response_model=list[MedicationSchedulePublic])
+async def get_medication_schedules_endpoint(
+    medication_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Obtener todos los horarios de un medicamento"""
+    from sqlalchemy import select
+    from app.meds.models import MedicationSchedule
+    
+    result = await db.execute(
+        select(MedicationSchedule)
+        .where(MedicationSchedule.medication_id == medication_id)
+        .order_by(MedicationSchedule.created_at.desc())
+    )
+    return result.scalars().all()
+
+
 @router.post("/medications/{medication_id}/schedule", response_model=MedicationSchedulePublic)
 async def create_schedule_endpoint(
     medication_id: int,
     payload: MedicationScheduleCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    data = payload.model_dump(exclude={"medication_id"})
-    sched = await add_schedule(db, medication_id, data)
+    sched = await add_schedule(db, medication_id, payload.model_dump())
     await db.commit()
     await db.refresh(sched)
     return sched

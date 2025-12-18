@@ -36,7 +36,9 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
+      console.log('🔐 Iniciando login...');
       const user = await authService.login({ email, password });
+      console.log('✅ Login exitoso, usuario:', user.role);
       
       // Redirigir según el rol del usuario
       const roleRoutes: Record<string, string> = {
@@ -48,9 +50,22 @@ export default function LoginScreen() {
       };
 
       const redirectTo = roleRoutes[user.role] || '/pages/senior';
-      router.replace(redirectTo as any);
+      console.log('📍 Redirigiendo a:', redirectTo);
+      
+      // Usar un pequeño delay para asegurar que el estado se guarde
+      setTimeout(() => {
+        router.replace(redirectTo as any);
+      }, 100);
     } catch (error: any) {
-      const message = error.response?.data?.detail || 'Error al iniciar sesión';
+      console.error('❌ Error en login:', error);
+      let message = 'Error al iniciar sesión';
+      
+      if (error.response?.data?.detail) {
+        message = error.response.data.detail;
+      } else if (error.message) {
+        message = error.message;
+      }
+      
       Alert.alert('Error', message);
     } finally {
       setLoading(false);

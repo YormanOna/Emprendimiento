@@ -88,13 +88,19 @@ export default function RegisterScreen() {
 
       console.log('✅ Registro exitoso');
       
+      // Limpiar campos del formulario
+      setFullName('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      
       Alert.alert(
         'Éxito',
         'Cuenta creada exitosamente. Por favor inicia sesión.',
         [
           {
             text: 'OK',
-            onPress: () => router.replace('/login'),
+            onPress: () => router.push('/login'),
           },
         ]
       );

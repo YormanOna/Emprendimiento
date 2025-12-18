@@ -1,6 +1,6 @@
 // app/pages/senior/index.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import authService, { User } from '@/services/authService';
@@ -22,12 +22,26 @@ export default function SeniorDashboard() {
     const userData = await authService.getCurrentUser();
     setUser(userData);
     
-    if (userData) {
-      const statsData = await statsService.getDashboardStats(userData.id);
+    if (userData?.senior_id) {
+      const statsData = await statsService.getDashboardStats(userData.senior_id);
       setStats(statsData);
 
-      const remindersData = await remindersService.getReminders(userData.id);
-      setReminders(remindersData.slice(0, 4));
+      // Cargar recordatorios y filtrar solo los de hoy
+      const remindersData = await remindersService.getReminders(userData.senior_id);
+      console.log('🔔 Todos los recordatorios:', remindersData);
+      
+      const todayReminders = remindersData.filter(r => {
+        const scheduledDate = new Date(r.scheduled_at);
+        const today = new Date();
+        return (
+          scheduledDate.getDate() === today.getDate() &&
+          scheduledDate.getMonth() === today.getMonth() &&
+          scheduledDate.getFullYear() === today.getFullYear()
+        );
+      });
+      
+      console.log('📅 Recordatorios de hoy:', todayReminders);
+      setReminders(todayReminders.slice(0, 4)); // Máximo 4
     }
   };
 
@@ -61,6 +75,24 @@ export default function SeniorDashboard() {
   const isToday = (date: Date) => {
     const today = new Date();
     return date.toDateString() === today.toDateString();
+  };
+
+  const isOverdue = (reminder: Reminder) => {
+    if (reminder.done_at) return false;
+    const scheduledDate = new Date(reminder.scheduled_at);
+    const now = new Date();
+    return scheduledDate < now;
+  };
+
+  const handleMarkDone = async (reminder: Reminder) => {
+    try {
+      await remindersService.markDone(reminder.id);
+      Alert.alert('✅ Completado', `"${reminder.title}" marcado como hecho`);
+      await loadData(); // Recargar
+    } catch (error) {
+      console.error('Error marking reminder done:', error);
+      Alert.alert('Error', 'No se pudo marcar el recordatorio');
+    }
   };
 
   return (
@@ -126,40 +158,90 @@ export default function SeniorDashboard() {
           <Text style={styles.sectionTitle}>Recordatorios de Hoy</Text>
           <TouchableOpacity 
             style={styles.viewAllBtn}
-            onPress={() => router.push('/pages/senior/reminders')}
+            onPress={() => router.push('/pages/senior/medications')}
           >
             <Text style={styles.viewAllText}>Ver todos</Text>
             <Ionicons name="chevron-forward" size={18} color="#8b5cf6" />
           </TouchableOpacity>
         </View>
         {reminders.length > 0 ? (
-          reminders.map((reminder) => (
-            <View key={reminder.id} style={styles.reminderCard}>
-              <View style={styles.reminderLeft}>
-                <View style={styles.iconCircle}>
-                  <Ionicons 
-                    name={
-                      reminder.title.toLowerCase().includes('medicin') ? 'medical' :
-                      reminder.title.toLowerCase().includes('cita') ? 'calendar' :
-                      'checkmark-circle'
-                    } 
-                    size={24} 
-                    color="#8b5cf6" 
-                  />
+          reminders.map((reminder) => {
+            const isDone = !!reminder.done_at;
+            const overdue = isOverdue(reminder);
+            const scheduledDate = new Date(reminder.scheduled_at);
+            
+            return (
+              <TouchableOpacity 
+                key={reminder.id} 
+                style={[
+                  styles.reminderCard,
+                  isDone && styles.reminderCardDone,
+                  overdue && styles.reminderCardOverdue
+                ]}
+                onPress={() => !isDone && handleMarkDone(reminder)}
+                disabled={isDone}
+              >
+                <View style={styles.reminderLeft}>
+                  <View style={[
+                    styles.iconCircle,
+                    isDone && styles.iconCircleDone,
+                    overdue && styles.iconCircleOverdue
+                  ]}>
+                    <Ionicons 
+                      name={
+                        isDone ? 'checkmark-circle' :
+                        reminder.title.toLowerCase().includes('medicin') ? 'medical' :
+                        reminder.title.toLowerCase().includes('cita') ? 'calendar' :
+                        'notifications'
+                      } 
+                      size={24} 
+                      color={isDone ? '#10b981' : overdue ? '#ef4444' : '#8b5cf6'} 
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[
+                      styles.reminderTitle,
+                      isDone && styles.reminderTitleDone,
+                      overdue && styles.reminderTitleOverdue
+                    ]}>
+                      {reminder.title}
+                    </Text>
+                    <View style={styles.reminderTimeRow}>
+                      <Ionicons 
+                        name="time" 
+                        size={14} 
+                        color={overdue ? '#ef4444' : '#94a3b8'} 
+                      />
+                      <Text style={[
+                        styles.reminderTime,
+                        overdue && styles.reminderTimeOverdue
+                      ]}>
+                        {scheduledDate.toLocaleTimeString('es-MX', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Text>
+                      {overdue && !isDone && (
+                        <View style={styles.overdueChip}>
+                          <Text style={styles.overdueChipText}>Atrasado</Text>
+                        </View>
+                      )}
+                      {isDone && (
+                        <View style={styles.doneChip}>
+                          <Text style={styles.doneChipText}>Tomado</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                  <Text style={styles.reminderTime}>
-                    {new Date(reminder.scheduled_at).toLocaleTimeString('es-MX', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
-            </View>
-          ))
+                {!isDone && (
+                  <View style={styles.tapHint}>
+                    <Ionicons name="hand-left-outline" size={16} color="#8b5cf6" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-circle-outline" size={48} color="#cbd5e1" />
@@ -249,11 +331,85 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   viewAllText: { fontSize: 14, fontWeight: '600', color: '#8b5cf6' },
-  reminderCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  reminderCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    backgroundColor: '#fff', 
+    padding: 16, 
+    borderRadius: 12, 
+    marginBottom: 12, 
+    borderWidth: 2,
+    borderColor: 'transparent',
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 2, 
+    elevation: 1 
+  },
+  reminderCardDone: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    opacity: 0.7,
+  },
+  reminderCardOverdue: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2',
+  },
   reminderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   iconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#f3e8ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  iconCircleDone: {
+    backgroundColor: '#d1fae5',
+  },
+  iconCircleOverdue: {
+    backgroundColor: '#fee2e2',
+  },
   reminderTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 4 },
+  reminderTitleDone: {
+    color: '#94a3b8',
+  },
+  reminderTitleOverdue: {
+    color: '#ef4444',
+    fontWeight: '700',
+  },
+  reminderTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
   reminderTime: { fontSize: 13, color: '#64748b' },
+  reminderTimeOverdue: {
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  overdueChip: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  overdueChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ef4444',
+  },
+  doneChip: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  doneChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  tapHint: {
+    padding: 8,
+  },
   emptyState: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { fontSize: 14, color: '#94a3b8', marginTop: 12 },
   quickAccess: { flexDirection: 'row', padding: 16, gap: 12, paddingBottom: 16 },

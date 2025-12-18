@@ -6,18 +6,28 @@ import authService, { User } from '@/services/authService';
 export default function Index() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
     checkAuth();
   }, []);
 
   const checkAuth = async () => {
-    const currentUser = await authService.getCurrentUser();
-    setUser(currentUser);
-    setLoading(false);
+    try {
+      console.log('🔍 Verificando autenticación...');
+      const currentUser = await authService.getCurrentUser();
+      console.log('👤 Usuario actual:', currentUser?.email || 'No autenticado');
+      setUser(currentUser);
+    } catch (error) {
+      console.error('❌ Error verificando auth:', error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+      setIsChecking(false);
+    }
   };
 
-  if (loading) {
+  if (loading || isChecking) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -26,6 +36,7 @@ export default function Index() {
   }
 
   if (!user) {
+    console.log('🔓 No hay usuario, redirigiendo a login');
     return <Redirect href="/login" />;
   }
 
@@ -39,6 +50,7 @@ export default function Index() {
   };
 
   const redirectTo = roleRoutes[user.role] || '/login';
+  console.log('📍 Redirigiendo a:', redirectTo);
   
   return <Redirect href={redirectTo} />;
 }

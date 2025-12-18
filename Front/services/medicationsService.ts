@@ -73,6 +73,26 @@ class MedicationsService {
     }
   }
 
+  async getMedication(medicationId: number): Promise<Medication | null> {
+    try {
+      const response = await api.get<Medication>(`/meds/medications/${medicationId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo medicamento:', error);
+      return null;
+    }
+  }
+
+  async getMedicationSchedules(medicationId: number): Promise<Schedule[]> {
+    try {
+      const response = await api.get<Schedule[]>(`/meds/medications/${medicationId}/schedules`);
+      return response.data;
+    } catch (error) {
+      console.error('Error obteniendo horarios:', error);
+      return [];
+    }
+  }
+
   async createMedication(seniorId: number, data: MedicationCreate): Promise<Medication | null> {
     try {
       const response = await api.post<Medication>(`/meds/seniors/${seniorId}/medications`, data);

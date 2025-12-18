@@ -6,13 +6,13 @@ from typing import Optional, List
 
 class ConversationCreate(BaseModel):
     senior_id: int = Field(gt=0, description="ID del adulto mayor")
-    doctor_user_id: int = Field(gt=0, description="ID del doctor")
+    doctor_user_id: int | None = Field(default=None, description="ID del doctor (opcional)")
 
 
 class ConversationPublic(BaseModel):
     id: int
     senior_id: int
-    doctor_user_id: int
+    doctor_user_id: int | None
     status: str
 
     class Config:

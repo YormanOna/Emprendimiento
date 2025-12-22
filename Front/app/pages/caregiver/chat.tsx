@@ -1,4 +1,4 @@
-// app/pages/family/chat.tsx
+// app/pages/caregiver/chat.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   View, 
@@ -14,10 +14,8 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import chatService, { Message, ChatWebSocket, Conversation } from '@/services/chatService';
 import authService, { User } from '@/services/authService';
-import seniorsService from '@/services/seniorsService';
 
 export default function ChatScreen() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,26 +25,16 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
   const wsRef = useRef<ChatWebSocket | null>(null);
-  const isInitialized = useRef(false);
 
-  // Auto-refresh al volver a la página
-  useFocusEffect(
-    React.useCallback(() => {
-      if (!isInitialized.current) {
-        isInitialized.current = true;
-        initChat();
+  useEffect(() => {
+    initChat();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.disconnect();
       }
-      
-      return () => {
-        // Solo desconectar cuando realmente se desmonta el componente
-        if (wsRef.current) {
-          wsRef.current.disconnect();
-          wsRef.current = null;
-        }
-        isInitialized.current = false;
-      };
-    }, [])
-  );
+    };
+  }, []);
 
   const initChat = async () => {
     try {
@@ -56,37 +44,12 @@ export default function ChatScreen() {
       const userData = await authService.getCurrentUser();
       setUser(userData);
 
-      if (!userData?.id) {
-        console.error('Usuario no autenticado');
-        setLoading(false);
-        return;
-      }
-
-      // Obtener seniors asignados a este familiar
-      const seniors = await seniorsService.getSeniors(userData.id);
-      
-      if (seniors.length === 0) {
-        console.log('⚠️ No hay seniors asignados');
-        setLoading(false);
-        return;
-      }
-
-      // Usar el primer senior asignado
-      const firstSenior = seniors[0];
-
-      // Obtener o crear conversación para este senior
+      // Obtener conversaciones disponibles para el usuario
       const conversations = await chatService.getConversations();
-      let conv = conversations.find(c => c.senior_id === firstSenior.id);
-
-      if (!conv) {
-        // Crear nueva conversación
-        const newConv = await chatService.createConversation({ senior_id: firstSenior.id });
-        if (newConv) {
-          conv = newConv;
-        }
-      }
-
-      if (conv) {
+      
+      // Usar la primera conversación disponible
+      if (conversations.length > 0) {
+        const conv = conversations[0];
         setConversation(conv);
         await loadMessages(conv.id);
         connectWebSocket(conv.id);
@@ -107,24 +70,10 @@ export default function ChatScreen() {
 
   const connectWebSocket = async (conversationId: number) => {
     try {
-      // Desconectar WebSocket anterior si existe
-      if (wsRef.current) {
-        wsRef.current.disconnect();
-        wsRef.current = null;
-      }
-
       wsRef.current = new ChatWebSocket(
         conversationId,
         (newMessage: Message) => {
-          // Evitar duplicados: solo agregar si no existe
-          setMessages(prev => {
-            const exists = prev.some(msg => msg.id === newMessage.id);
-            if (exists) {
-              console.log('⚠️ Mensaje duplicado ignorado:', newMessage.id);
-              return prev;
-            }
-            return [...prev, newMessage];
-          });
+          setMessages(prev => [...prev, newMessage]);
           setTimeout(() => scrollToBottom(), 100);
         }
       );
@@ -163,44 +112,26 @@ export default function ChatScreen() {
     
     const newMsg = await chatService.sendMessage(conversation.id, content);
     if (newMsg) {
-      setMessages(prev => {
-        const exists = prev.some(msg => msg.id === newMsg.id);
-        if (exists) return prev;
-        return [...prev, newMsg];
-      });
+      setMessages(prev => [...prev, newMsg]);
       setTimeout(() => scrollToBottom(), 100);
     }
   };
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Chat</Text>
-        </View>
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color="#9333ea" />
-          <Text style={{ marginTop: 16, color: '#6b7280' }}>Cargando chat...</Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#f59e0b" />
+        <Text style={styles.loadingText}>Cargando chat...</Text>
       </View>
     );
   }
 
   if (!conversation) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Chat</Text>
-        </View>
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#d1d5db" />
-          <Text style={{ marginTop: 16, fontSize: 16, color: '#6b7280', textAlign: 'center' }}>
-            No hay conversación disponible
-          </Text>
-          <Text style={{ marginTop: 8, fontSize: 14, color: '#9ca3af', textAlign: 'center' }}>
-            Necesitas tener seniors asignados para usar el chat
-          </Text>
-        </View>
+      <View style={styles.errorContainer}>
+        <Ionicons name="chatbubbles-outline" size={64} color="#d1d5db" />
+        <Text style={styles.errorText}>No hay conversaciones disponibles</Text>
+        <Text style={styles.errorSubtext}>Espera a que se te asigne un paciente</Text>
       </View>
     );
   }
@@ -214,7 +145,7 @@ export default function ChatScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Chat</Text>
-          <Text style={styles.subtitle}>Conversación con el equipo médico</Text>
+          <Text style={styles.subtitle}>Conversación con el equipo de cuidado</Text>
         </View>
 
         <ScrollView
@@ -232,7 +163,7 @@ export default function ChatScreen() {
             </View>
           ) : (
             messages.map((msg) => {
-              const isMe = user ? msg.sender_user_id === user.id : false;
+              const isMe = msg.sender_user_id === user?.id;
               return (
                 <View
                   key={msg.id}
@@ -288,12 +219,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    padding: 32,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   header: {
     padding: 16,
     paddingTop: 50,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    backgroundColor: '#ec4899',
+    backgroundColor: '#f59e0b',
   },
   headerTitle: {
     fontSize: 20,
@@ -302,7 +264,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#fce7f3',
+    color: '#fef3c7',
     marginTop: 4,
   },
   messagesContainer: {
@@ -338,7 +300,7 @@ const styles = StyleSheet.create({
   },
   myMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#ec4899',
+    backgroundColor: '#f59e0b',
   },
   theirMessage: {
     alignSelf: 'flex-start',
@@ -391,7 +353,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ec4899',
+    backgroundColor: '#f59e0b',
     justifyContent: 'center',
     alignItems: 'center',
   },

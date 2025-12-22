@@ -1,6 +1,6 @@
 # app/chat/websocket.py
 from typing import Dict, Set
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException
 from sqlalchemy import select
@@ -11,6 +11,9 @@ from app.core.database import AsyncSessionLocal
 from app.chat.service import send_message
 from app.chat.models import Conversation
 from app.seniors.models import CareTeam
+
+# Zona horaria de Ecuador (ECT - UTC-5)
+ECUADOR_TZ = timezone(timedelta(hours=-5))
 
 
 class ConnectionManager:
@@ -38,18 +41,27 @@ manager = ConnectionManager()
 
 async def conversations_ws(ws: WebSocket, conversation_id: int):
     # Primero validar el token ANTES de aceptar la conexión
+    print(f"🔌 Nueva conexión WebSocket a conversación {conversation_id}")
+    print(f"🔍 Query params: {ws.query_params}")
+    
     try:
         token = ws.query_params.get("token")
         if not token:
+            print(f"❌ Token faltante en query params")
             await ws.close(code=4001, reason="Missing token")
             return
         
+        print(f"🔑 Token recibido (primeros 20 chars): {token[:20]}...")
         payload = decode_token(token)
+        print(f"✅ Token decodificado: {payload}")
+        
         if payload.get("type") != "access":
+            print(f"❌ Tipo de token inválido: {payload.get('type')}")
             await ws.close(code=4001, reason="Invalid token type")
             return
         
         user_id = int(payload["sub"])
+        print(f"👤 Usuario autenticado: {user_id}")
     except Exception as e:
         print(f"❌ Error validando token WebSocket: {e}")
         await ws.close(code=4001, reason="Invalid token")

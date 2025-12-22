@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import authService, { User } from '@/services/authService';
 import seniorsService, { Senior } from '@/services/seniorsService';
 
@@ -10,6 +11,13 @@ export default function DoctorPatientsScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [seniors, setSeniors] = useState<Senior[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Auto-refresh al volver a la página
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   useEffect(() => {
     loadData();
@@ -97,30 +105,36 @@ export default function DoctorPatientsScreen() {
         <View style={styles.actionsGrid}>
           <TouchableOpacity 
             style={styles.actionCard}
-            onPress={() => router.push('/pages/hospitals-map' as any)}
+            onPress={() => router.push('/pages/doctor/relations')}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}>
-              <Ionicons name="medical" size={28} color="#ef4444" />
+            <View style={[styles.actionIcon, { backgroundColor: '#d1fae5' }]}>
+              <Ionicons name="people" size={28} color="#14b8a6" />
             </View>
-            <Text style={styles.actionText}>Hospitales</Text>
+            <Text style={styles.actionText}>Mis Pacientes</Text>
           </TouchableOpacity>
+          
           <TouchableOpacity style={styles.actionCard}>
             <View style={[styles.actionIcon, { backgroundColor: '#dbeafe' }]}>
               <Ionicons name="calendar" size={28} color="#3b82f6" />
             </View>
             <Text style={styles.actionText}>Citas</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionCard}>
-            <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="clipboard" size={28} color="#f59e0b" />
-            </View>
-            <Text style={styles.actionText}>Reportes</Text>
-          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.actionCard}>
             <View style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}>
               <Ionicons name="chatbubbles" size={28} color="#10b981" />
             </View>
             <Text style={styles.actionText}>Mensajes</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionCard}
+            onPress={() => router.push('/pages/hospitals-map' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}>
+              <Ionicons name="medical" size={28} color="#ef4444" />
+            </View>
+            <Text style={styles.actionText}>Hospitales</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -20,20 +20,13 @@ export default function CaregiverLayout() {
           fontSize: 12,
           fontWeight: '600',
         },
-        headerStyle: {
-          backgroundColor: '#f59e0b',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Inicio',
-          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
@@ -66,6 +59,10 @@ export default function CaregiverLayout() {
           ),
         }}
       />
+      {/* Páginas ocultas - accesibles por navegación pero no en tabs */}
+      <Tabs.Screen name="medications-manage" options={{ href: null }} />
+      <Tabs.Screen name="chat" options={{ href: null }} />
+      <Tabs.Screen name="relations" options={{ href: null }} />
     </Tabs>
   );
 }

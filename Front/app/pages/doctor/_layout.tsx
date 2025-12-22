@@ -20,13 +20,7 @@ export default function DoctorLayout() {
           fontSize: 12,
           fontWeight: '600',
         },
-        headerStyle: {
-          backgroundColor: '#10b981',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
@@ -65,6 +59,8 @@ export default function DoctorLayout() {
           ),
         }}
       />
+      {/* Páginas ocultas - accesibles por navegación pero no en tabs */}
+      <Tabs.Screen name="relations" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -42,6 +42,30 @@ async def get_senior(db: AsyncSession, senior_id: int) -> SeniorProfile | None:
     return res.scalar_one_or_none()
 
 
-async def list_team(db: AsyncSession, senior_id: int) -> list[CareTeam]:
-    res = await db.execute(select(CareTeam).where(CareTeam.senior_id == senior_id))
-    return list(res.scalars().all())
+async def list_team(db: AsyncSession, senior_id: int) -> list[dict]:
+    """Listar miembros del equipo con información del usuario"""
+    from sqlalchemy.orm import selectinload
+    
+    res = await db.execute(
+        select(CareTeam)
+        .where(CareTeam.senior_id == senior_id)
+        .options(selectinload(CareTeam.user))
+    )
+    members = res.scalars().all()
+    
+    result = []
+    for member in members:
+        result.append({
+            "id": member.id,
+            "senior_id": member.senior_id,
+            "user_id": member.user_id,
+            "user_name": member.user.full_name if member.user else "Desconocido",
+            "user_email": member.user.email if member.user else "",
+            "user_role": member.user.role.value if member.user else "",
+            "membership_role": member.membership_role.value,
+            "can_view": member.can_view,
+            "can_edit": member.can_edit,
+            "added_at": member.created_at.isoformat(),
+        })
+    
+    return result

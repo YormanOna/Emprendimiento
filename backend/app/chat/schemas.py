@@ -20,7 +20,6 @@ class ConversationPublic(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    conversation_id: int = Field(gt=0, description="ID de la conversación")
     content: str = Field(
         min_length=1,
         max_length=4000,
@@ -43,3 +42,19 @@ class MessagePublic(BaseModel):
 class ConversationWithMessages(BaseModel):
     conversation: ConversationPublic
     messages: List[MessagePublic]
+
+
+class LastMessageInfo(BaseModel):
+    content: str
+    sent_at: str
+
+
+class ConversationWithLastMessage(BaseModel):
+    id: int
+    senior_id: int
+    senior_name: str
+    doctor_user_id: Optional[int]
+    status: str
+    last_message: Optional[LastMessageInfo]
+    created_at: str
+    updated_at: str

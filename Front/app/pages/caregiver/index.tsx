@@ -11,14 +11,26 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import authService, { User } from '@/services/authService';
 import seniorsService, { Senior } from '@/services/seniorsService';
+import medicationsService, { Medication } from '@/services/medicationsService';
+import remindersService, { Reminder } from '@/services/remindersService';
 
 export default function CaregiverDashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [seniors, setSeniors] = useState<Senior[]>([]);
   const [selectedSenior, setSelectedSenior] = useState<Senior | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [todayReminders, setTodayReminders] = useState<Reminder[]>([]);
+
+  // Auto-refresh al volver a la página
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   useEffect(() => {
     loadData();
@@ -28,13 +40,38 @@ export default function CaregiverDashboard() {
     const userData = await authService.getCurrentUser();
     setUser(userData);
     
-    const seniorsData = await seniorsService.getSeniors();
+    // Para cuidadores, solo cargar sus seniors asignados
+    const seniorsData = userData?.id 
+      ? await seniorsService.getSeniors(userData.id)
+      : await seniorsService.getSeniors();
+    
     console.log('Seniors data:', JSON.stringify(seniorsData, null, 2));
     setSeniors(seniorsData);
     
     // Seleccionar primer senior por defecto
     if (seniorsData.length > 0) {
       setSelectedSenior(seniorsData[0]);
+      await loadSeniorData(seniorsData[0].id);
+    }
+  };
+
+  const loadSeniorData = async (seniorId: number) => {
+    try {
+      // Cargar medicaciones del senior
+      const medsData = await medicationsService.getMedications(seniorId);
+      setMedications(medsData);
+      console.log('💊 Medicaciones cargadas:', medsData.length);
+
+      // Cargar recordatorios de hoy
+      const remindersData = await remindersService.getReminders(seniorId);
+      const today = new Date().toISOString().split('T')[0];
+      const todayRems = remindersData.filter((r: Reminder) => 
+        r.reminder_date && r.reminder_date.startsWith(today)
+      );
+      setTodayReminders(todayRems);
+      console.log('🔔 Recordatorios de hoy:', todayRems.length);
+    } catch (error) {
+      console.error('❌ Error cargando datos del senior:', error);
     }
   };
 
@@ -57,23 +94,23 @@ export default function CaregiverDashboard() {
     return age;
   };
 
-  const handleSelectSenior = () => {
-    if (seniors.length === 0) {
-      Alert.alert('Sin pacientes', 'No hay pacientes asignados.');
-      return;
-    }
+  const handleSelectSenior = async (senior: Senior) => {
+    setSelectedSenior(senior);
+    await loadSeniorData(senior.id);
+  };
+
+  const handleMarkAsTaken = async (medId: number) => {
+    if (!selectedSenior) return;
     
-    Alert.alert(
-      'Seleccionar Paciente',
-      'Elige el paciente que deseas ver',
-      [
-        ...seniors.map((senior) => ({
-          text: senior.full_name,
-          onPress: () => setSelectedSenior(senior),
-        })),
-        { text: 'Cancelar', style: 'cancel' },
-      ]
-    );
+    try {
+      await medicationsService.markAsTaken(selectedSenior.id, medId);
+      // Recargar medicaciones
+      await loadSeniorData(selectedSenior.id);
+      Alert.alert('✅ Éxito', 'Medicamento marcado como tomado');
+    } catch (error) {
+      console.error('❌ Error marcando medicamento:', error);
+      Alert.alert('❌ Error', 'No se pudo marcar el medicamento');
+    }
   };
 
   const handleLogout = async () => {
@@ -103,15 +140,28 @@ export default function CaregiverDashboard() {
         </TouchableOpacity>
       </View>
 
-      {/* Patient Selector */}
-      {seniors.length > 0 && selectedSenior && (
+      {/* Patient Selector o Estado Vacío */}
+      {seniors.length === 0 ? (
+        <View style={styles.emptyStateCard}>
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="people-outline" size={64} color="#d1d5db" />
+          </View>
+          <Text style={styles.emptyTitle}>No tienes pacientes asignados</Text>
+          <Text style={styles.emptyDescription}>
+            Para comenzar a cuidar adultos mayores, agrega pacientes desde la sección de relaciones.
+          </Text>
+          <TouchableOpacity 
+            style={styles.emptyActionButton}
+            onPress={() => router.push('/pages/caregiver/relations')}
+          >
+            <Ionicons name="add-circle" size={24} color="#fff" />
+            <Text style={styles.emptyActionText}>Agregar Pacientes</Text>
+          </TouchableOpacity>
+        </View>
+      ) : selectedSenior && (
         <View style={styles.selectedPatientCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Paciente Activo</Text>
-            <TouchableOpacity style={styles.changePatientBtn} onPress={handleSelectSenior}>
-              <Text style={styles.changePatientText}>Cambiar</Text>
-              <Ionicons name="swap-horizontal" size={18} color="#f59e0b" />
-            </TouchableOpacity>
           </View>
           <View style={styles.patientInfoRow}>
             <View style={styles.seniorAvatar}>
@@ -130,24 +180,62 @@ export default function CaregiverDashboard() {
         </View>
       )}
 
-      {/* Today's Tasks */}
-      {selectedSenior && (
+      {/* Today's Medications */}
+      {selectedSenior && medications.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tareas de Hoy</Text>
-          <View style={styles.taskCard}>
-            <View style={styles.taskHeader}>
-              <Ionicons name="checkmark-circle" size={24} color="#10b981" />
-              <Text style={styles.taskTitle}>Medicamentos Programados</Text>
+          <Text style={styles.sectionTitle}>Medicamentos de Hoy 💊</Text>
+          {medications.slice(0, 3).map((med) => (
+            <View key={med.id} style={styles.medicationCard}>
+              <View style={styles.medicationInfo}>
+                <Text style={styles.medicationName}>{med.name}</Text>
+                <Text style={styles.medicationDetails}>
+                  {med.dose} {med.unit}
+                </Text>
+                {med.notes && (
+                  <Text style={styles.medicationSchedule}>📝 {med.notes}</Text>
+                )}
+              </View>
+              <TouchableOpacity 
+                style={styles.medicationActionBtn}
+                onPress={() => handleMarkAsTaken(med.id)}
+                disabled={med.taken_today}
+              >
+                <Ionicons 
+                  name={med.taken_today ? "checkmark-circle" : "checkmark-circle-outline"} 
+                  size={32} 
+                  color={med.taken_today ? "#10b981" : "#f59e0b"} 
+                />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.taskCount}>Ver detalles</Text>
-          </View>
-          <View style={styles.taskCard}>
-            <View style={styles.taskHeader}>
-              <Ionicons name="calendar" size={24} color="#f59e0b" />
-              <Text style={styles.taskTitle}>Citas Médicas</Text>
+          ))}
+          {medications.length > 3 && (
+            <Text style={styles.moreText}>+{medications.length - 3} más medicamentos</Text>
+          )}
+        </View>
+      )}
+
+      {/* Today's Reminders */}
+      {selectedSenior && todayReminders.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recordatorios de Hoy 🔔</Text>
+          {todayReminders.map((reminder) => (
+            <View key={reminder.id} style={styles.reminderCard}>
+              <Ionicons 
+                name={reminder.completed ? "checkmark-circle" : "alarm-outline"} 
+                size={24} 
+                color={reminder.completed ? "#10b981" : "#f59e0b"} 
+              />
+              <View style={styles.reminderInfo}>
+                <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                <Text style={styles.reminderTime}>
+                  {new Date(reminder.reminder_date).toLocaleTimeString('es-ES', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.taskCount}>Ver próximas</Text>
-          </View>
+          ))}
         </View>
       )}
 
@@ -169,7 +257,7 @@ export default function CaregiverDashboard() {
               <TouchableOpacity
                 key={senior.id}
                 style={[styles.seniorCard, isSelected && styles.seniorCardSelected]}
-                onPress={() => setSelectedSenior(senior)}
+                onPress={() => handleSelectSenior(senior)}
               >
                 <View style={[styles.seniorAvatar, isSelected && styles.seniorAvatarSelected]}>
                   <Text style={[styles.seniorInitials, isSelected && styles.seniorInitialsSelected]}>
@@ -207,36 +295,39 @@ export default function CaregiverDashboard() {
               onPress={() => router.push('/pages/caregiver/medications-manage' as any)}
             >
               <View style={[styles.actionIcon, { backgroundColor: '#dbeafe' }]}>
-                <Ionicons name="medkit" size={24} color="#3b82f6" />
+                <Ionicons name="medkit" size={26} color="#3b82f6" />
               </View>
-              <Text style={styles.actionText}>Gestionar Medicamentos</Text>
+              <Text style={styles.actionText}>Medicamentos</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
-                <Ionicons name="document-text" size={24} color="#f59e0b" />
-              </View>
-              <Text style={styles.actionText}>Notas</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionCard}>
+            
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/caregiver/chat' as any)}
+            >
               <View style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}>
-                <Ionicons name="chatbubbles" size={24} color="#10b981" />
+                <Ionicons name="chatbubbles" size={26} color="#10b981" />
               </View>
               <Text style={styles.actionText}>Mensajes</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => router.push('/pages/caregiver/relations' as any)}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: '#e0e7ff' }]}>
+                <Ionicons name="people" size={26} color="#6366f1" />
+              </View>
+              <Text style={styles.actionText}>Mis Pacientes</Text>
+            </TouchableOpacity>
+            
             <TouchableOpacity 
               style={styles.actionCard}
               onPress={() => router.push('/pages/hospitals-map' as any)}
             >
               <View style={[styles.actionIcon, { backgroundColor: '#fee2e2' }]}>
-                <Ionicons name="medical" size={24} color="#ef4444" />
+                <Ionicons name="medical" size={26} color="#ef4444" />
               </View>
               <Text style={styles.actionText}>Hospitales</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionCard}>
-              <View style={[styles.actionIcon, { backgroundColor: '#fce7f3' }]}>
-                <Ionicons name="alert-circle" size={24} color="#ec4899" />
-              </View>
-              <Text style={styles.actionText}>Emergencia</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -445,5 +536,124 @@ const styles = StyleSheet.create({
   },
   seniorInitialsSelected: {
     color: '#ffffff',
+  },
+  medicationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  medicationInfo: {
+    flex: 1,
+  },
+  medicationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  medicationDetails: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 2,
+  },
+  medicationSchedule: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  medicationActionBtn: {
+    marginLeft: 12,
+    padding: 4,
+  },
+  moreText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  reminderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  reminderInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  reminderTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 2,
+  },
+  reminderTime: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  // Empty State
+  emptyStateCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    margin: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptyIconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: 15,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

@@ -6,11 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import authService, { User } from '@/services/authService';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -23,7 +26,13 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    await authService.logout();
+    try {
+      await authService.logout();
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      Alert.alert('Error', 'No se pudo cerrar sesión');
+    }
   };
 
   return (

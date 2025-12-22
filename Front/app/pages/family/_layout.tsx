@@ -20,13 +20,7 @@ export default function FamilyLayout() {
           fontSize: 12,
           fontWeight: '600',
         },
-        headerStyle: {
-          backgroundColor: '#ec4899',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
       }}
     >
       <Tabs.Screen
@@ -65,6 +59,8 @@ export default function FamilyLayout() {
           ),
         }}
       />
+      {/* Páginas ocultas - accesibles por navegación pero no en tabs */}
+      <Tabs.Screen name="relations" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -66,6 +66,8 @@ export default function SeniorLayout() {
       <Tabs.Screen name="appointment-detail" options={{ href: null }} />
       <Tabs.Screen name="medications-manage" options={{ href: null }} />
       <Tabs.Screen name="appointments-manage" options={{ href: null }} />
+      <Tabs.Screen name="chat" options={{ href: null }} />
+      <Tabs.Screen name="relations" options={{ href: null }} />
     </Tabs>
   );
 }

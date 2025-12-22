@@ -28,6 +28,8 @@ export default function SeniorMedicationsManageScreen() {
     dose: '',
     unit: 'mg',
     notes: '',
+    start_date: '',
+    end_date: '',
   });
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
   const [selectedDays, setSelectedDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]); // Todos los días por defecto
@@ -82,6 +84,27 @@ export default function SeniorMedicationsManageScreen() {
     }
   };
 
+  // Funciones auxiliares para las fechas
+  const getTomorrow = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  };
+
+  const getDateAfterDays = (days: number) => {
+    const startDate = newMed.start_date ? new Date(newMed.start_date) : new Date();
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + days);
+    return endDate.toISOString().split('T')[0];
+  };
+
+  const formatDateReadable = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -114,30 +137,31 @@ export default function SeniorMedicationsManageScreen() {
     }
 
     try {
-      // Crear medicamento
-      const medication = await medicationsService.createMedication(user.senior_id, {
+      // Crear medicamento con horarios incluidos
+      const medicationData: any = {
         name: newMed.name,
         dose: newMed.dose,
         unit: newMed.unit,
         notes: newMed.notes,
-      });
+      };
 
-      if (!medication) {
-        Alert.alert('Error', 'No se pudo crear el medicamento');
-        return;
-      }
-
-      // Crear horarios si se especificaron
+      // Agregar horarios si se especificaron
       if (selectedHours.length > 0) {
-        await medicationsService.createSchedule(medication.id, {
-          hours: selectedHours,
-          days_of_week: selectedDays,
-        });
+        medicationData.hours = selectedHours;
+        medicationData.days_of_week = selectedDays;
+        if (newMed.start_date) {
+          medicationData.start_date = newMed.start_date;
+        }
+        if (newMed.end_date) {
+          medicationData.end_date = newMed.end_date;
+        }
       }
+
+      await medicationsService.createMedication(user.senior_id, medicationData);
 
       Alert.alert('Éxito', 'Medicamento agregado correctamente');
       setModalVisible(false);
-      setNewMed({ name: '', dose: '', unit: 'mg', notes: '' });
+      setNewMed({ name: '', dose: '', unit: 'mg', notes: '', start_date: '', end_date: '' });
       setSelectedHours([]);
       setSelectedDays([0, 1, 2, 3, 4, 5, 6]); // Reset a todos los días
       setCurrentStep(1); // Reset al paso 1
@@ -170,7 +194,7 @@ export default function SeniorMedicationsManageScreen() {
   const handleCloseModal = () => {
     setModalVisible(false);
     setCurrentStep(1);
-    setNewMed({ name: '', dose: '', unit: 'mg', notes: '' });
+    setNewMed({ name: '', dose: '', unit: 'mg', notes: '', start_date: '', end_date: '' });
     setSelectedHours([]);
     setSelectedDays([0, 1, 2, 3, 4, 5, 6]);
   };
@@ -276,7 +300,7 @@ export default function SeniorMedicationsManageScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Nuevo Medicamento</Text>
-                <Text style={styles.stepIndicator}>Paso {currentStep} de 4</Text>
+                <Text style={styles.stepIndicator}>Paso {currentStep} de 5</Text>
               </View>
               <TouchableOpacity onPress={handleCloseModal}>
                 <Ionicons name="close-circle" size={28} color="#64748b" />
@@ -285,7 +309,7 @@ export default function SeniorMedicationsManageScreen() {
 
             {/* Indicador de progreso */}
             <View style={styles.progressContainer}>
-              {[1, 2, 3, 4].map((step) => (
+              {[1, 2, 3, 4, 5].map((step) => (
                 <View key={step} style={styles.progressStepWrapper}>
                   <View
                     style={[
@@ -307,7 +331,7 @@ export default function SeniorMedicationsManageScreen() {
                       </Text>
                     )}
                   </View>
-                  {step < 4 && (
+                  {step < 5 && (
                     <View
                       style={[
                         styles.progressLine,
@@ -494,8 +518,125 @@ export default function SeniorMedicationsManageScreen() {
                 </View>
               )}
 
-              {/* PASO 4: Notas y confirmación */}
+              {/* PASO 4: Duración del tratamiento */}
               {currentStep === 4 && (
+                <View style={styles.stepContainer}>
+                  <View style={styles.stepHeader}>
+                    <View style={styles.stepIconCircle}>
+                      <Ionicons name="calendar-outline" size={32} color="#8b5cf6" />
+                    </View>
+                    <Text style={styles.stepTitle}>Duración del Tratamiento</Text>
+                    <Text style={styles.stepDescription}>
+                      ¿Desde cuándo hasta cuándo tomará este medicamento?
+                    </Text>
+                  </View>
+
+                  <Text style={styles.label}>Fecha de Inicio</Text>
+                  <View style={styles.dateButtonsContainer}>
+                    <TouchableOpacity
+                      style={[styles.dateButton, !newMed.start_date && styles.dateButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, start_date: '' })}
+                    >
+                      <Ionicons name="today" size={24} color={!newMed.start_date ? "#fff" : "#8b5cf6"} />
+                      <Text style={[styles.dateButtonText, !newMed.start_date && styles.dateButtonTextSelected]}>
+                        Hoy
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dateButton, newMed.start_date === getTomorrow() && styles.dateButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, start_date: getTomorrow() })}
+                    >
+                      <Ionicons name="arrow-forward" size={24} color={newMed.start_date === getTomorrow() ? "#fff" : "#8b5cf6"} />
+                      <Text style={[styles.dateButtonText, newMed.start_date === getTomorrow() && styles.dateButtonTextSelected]}>
+                        Mañana
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  {newMed.start_date && (
+                    <View style={styles.selectedDateBox}>
+                      <Ionicons name="calendar" size={20} color="#8b5cf6" />
+                      <Text style={styles.selectedDateText}>
+                        Inicia: {formatDateReadable(newMed.start_date)}
+                      </Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.label}>Duración del Tratamiento</Text>
+                  <View style={styles.durationButtonsGrid}>
+                    <TouchableOpacity
+                      style={[styles.durationButton, !newMed.end_date && styles.durationButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, end_date: '' })}
+                    >
+                      <Ionicons name="infinite" size={28} color={!newMed.end_date ? "#fff" : "#8b5cf6"} />
+                      <Text style={[styles.durationButtonLabel, !newMed.end_date && styles.durationButtonLabelSelected]}>
+                        Indefinido
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.durationButton, newMed.end_date === getDateAfterDays(7) && styles.durationButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, end_date: getDateAfterDays(7) })}
+                    >
+                      <Text style={[styles.durationButtonNumber, newMed.end_date === getDateAfterDays(7) && styles.durationButtonLabelSelected]}>7</Text>
+                      <Text style={[styles.durationButtonLabel, newMed.end_date === getDateAfterDays(7) && styles.durationButtonLabelSelected]}>
+                        días
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.durationButton, newMed.end_date === getDateAfterDays(15) && styles.durationButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, end_date: getDateAfterDays(15) })}
+                    >
+                      <Text style={[styles.durationButtonNumber, newMed.end_date === getDateAfterDays(15) && styles.durationButtonLabelSelected]}>15</Text>
+                      <Text style={[styles.durationButtonLabel, newMed.end_date === getDateAfterDays(15) && styles.durationButtonLabelSelected]}>
+                        días
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.durationButton, newMed.end_date === getDateAfterDays(30) && styles.durationButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, end_date: getDateAfterDays(30) })}
+                    >
+                      <Text style={[styles.durationButtonNumber, newMed.end_date === getDateAfterDays(30) && styles.durationButtonLabelSelected]}>1</Text>
+                      <Text style={[styles.durationButtonLabel, newMed.end_date === getDateAfterDays(30) && styles.durationButtonLabelSelected]}>
+                        mes
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.durationButton, newMed.end_date === getDateAfterDays(60) && styles.durationButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, end_date: getDateAfterDays(60) })}
+                    >
+                      <Text style={[styles.durationButtonNumber, newMed.end_date === getDateAfterDays(60) && styles.durationButtonLabelSelected]}>2</Text>
+                      <Text style={[styles.durationButtonLabel, newMed.end_date === getDateAfterDays(60) && styles.durationButtonLabelSelected]}>
+                        meses
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.durationButton, newMed.end_date === getDateAfterDays(90) && styles.durationButtonSelected]}
+                      onPress={() => setNewMed({ ...newMed, end_date: getDateAfterDays(90) })}
+                    >
+                      <Text style={[styles.durationButtonNumber, newMed.end_date === getDateAfterDays(90) && styles.durationButtonLabelSelected]}>3</Text>
+                      <Text style={[styles.durationButtonLabel, newMed.end_date === getDateAfterDays(90) && styles.durationButtonLabelSelected]}>
+                        meses
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {newMed.start_date && newMed.end_date && (
+                    <View style={styles.durationSummary}>
+                      <Ionicons name="time" size={22} color="#8b5cf6" />
+                      <Text style={styles.durationText}>
+                        {formatDateReadable(newMed.start_date)} → {formatDateReadable(newMed.end_date)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* PASO 5: Notas y confirmación */}
+              {currentStep === 5 && (
                 <View style={styles.stepContainer}>
                   <View style={styles.stepHeader}>
                     <View style={styles.stepIconCircle}>
@@ -572,6 +713,20 @@ export default function SeniorMedicationsManageScreen() {
                       </View>
                     </View>
 
+                    {(newMed.start_date || newMed.end_date) && (
+                      <View style={styles.summaryRow}>
+                        <Ionicons name="calendar-outline" size={20} color="#8b5cf6" />
+                        <View style={styles.summaryContent}>
+                          <Text style={styles.summaryLabel}>Duración</Text>
+                          <Text style={styles.summaryValue}>
+                            {newMed.start_date ? `Desde: ${newMed.start_date}` : 'Desde hoy'}
+                            {newMed.end_date && `\nHasta: ${newMed.end_date}`}
+                            {!newMed.end_date && '\nSin fecha de fin'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
                     {newMed.notes && (
                       <View style={styles.summaryRow}>
                         <Ionicons name="information-circle" size={20} color="#8b5cf6" />
@@ -598,7 +753,7 @@ export default function SeniorMedicationsManageScreen() {
                 </TouchableOpacity>
               )}
               
-              {currentStep < 4 ? (
+              {currentStep < 5 ? (
                 <TouchableOpacity
                   style={[styles.nextButton, currentStep === 1 && styles.nextButtonFull]}
                   onPress={handleNextStep}
@@ -1020,6 +1175,109 @@ const styles = StyleSheet.create({
   saveButtonTextFinal: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: -8,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+
+  // Date picker buttons
+  dateButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  dateButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 18,
+    gap: 8,
+  },
+  dateButtonSelected: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#7c3aed',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  dateButtonTextSelected: {
+    color: '#fff',
+  },
+  selectedDateBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3e8ff',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 24,
+    gap: 10,
+  },
+  selectedDateText: {
+    fontSize: 15,
+    color: '#7c3aed',
+    fontWeight: '600',
+  },
+
+  // Duration buttons grid
+  durationButtonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  durationButton: {
+    width: '30%',
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 90,
+  },
+  durationButtonSelected: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#7c3aed',
+  },
+  durationButtonNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#8b5cf6',
+    marginBottom: 4,
+  },
+  durationButtonLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  durationButtonLabelSelected: {
+    color: '#fff',
+  },
+  durationSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3e8ff',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  durationText: {
+    fontSize: 14,
+    color: '#7c3aed',
     fontWeight: '600',
   },
 });

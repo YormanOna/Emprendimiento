@@ -1,10 +1,12 @@
 // app/pages/doctor/profile.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import authService, { User } from '@/services/authService';
 
 export default function DoctorProfileScreen() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -14,6 +16,16 @@ export default function DoctorProfileScreen() {
   const loadUser = async () => {
     const userData = await authService.getCurrentUser();
     setUser(userData);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      Alert.alert('Error', 'No se pudo cerrar sesión');
+    }
   };
 
   return (
@@ -45,7 +57,7 @@ export default function DoctorProfileScreen() {
           <Text style={styles.menuText}>Mis Reportes</Text>
           <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem} onPress={() => authService.logout()}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={24} color="#ef4444" />
           <Text style={[styles.menuText, { color: '#ef4444' }]}>Cerrar Sesión</Text>
         </TouchableOpacity>

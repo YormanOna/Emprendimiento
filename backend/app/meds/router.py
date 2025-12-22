@@ -24,18 +24,42 @@ async def create_medication_endpoint(
     db: AsyncSession = Depends(get_db),
     # _=Depends(require_senior_edit),  # Autenticación deshabilitada temporalmente
 ):
-    med = await create_medication(db, senior_id, payload.model_dump(exclude={"senior_id"}))
-    await db.commit()
-    await db.refresh(med)
-    return med
+    try:
+        from sqlalchemy.orm import selectinload
+        print(f"📥 Recibiendo datos: {payload.model_dump()}")
+        med = await create_medication(db, senior_id, payload.model_dump(exclude={"senior_id"}))
+        await db.commit()
+        
+        # Recargar con la relación schedules
+        from sqlalchemy import select
+        from app.meds.models import Medication
+        result = await db.execute(
+            select(Medication)
+            .where(Medication.id == med.id)
+            .options(selectinload(Medication.schedules))
+        )
+        med = result.scalar_one()
+        
+        print(f"✅ Medicamento creado: {med.id}")
+        return med
+    except Exception as e:
+        print(f"❌ Error creando medicamento: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 @router.get("/medications", response_model=list[MedicationPublic])
 async def get_all_medications_endpoint(db: AsyncSession = Depends(get_db)):
     """Listar todos los medicamentos del sistema (para admin)"""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     from app.meds.models import Medication
-    result = await db.execute(select(Medication).order_by(Medication.created_at.desc()))
+    result = await db.execute(
+        select(Medication)
+        .options(selectinload(Medication.schedules))
+        .order_by(Medication.created_at.desc())
+    )
     return result.scalars().all()
 
 
@@ -54,10 +78,15 @@ async def get_medication_endpoint(
 ):
     """Obtener detalles de un medicamento específico"""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     from app.meds.models import Medication
     from fastapi import HTTPException
     
-    result = await db.execute(select(Medication).where(Medication.id == medication_id))
+    result = await db.execute(
+        select(Medication)
+        .where(Medication.id == medication_id)
+        .options(selectinload(Medication.schedules))
+    )
     medication = result.scalar_one_or_none()
     if not medication:
         raise HTTPException(status_code=404, detail="Medication not found")

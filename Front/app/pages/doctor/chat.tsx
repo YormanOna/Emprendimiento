@@ -33,11 +33,8 @@ export default function DoctorChatScreen() {
 
   const connectWebSocket = async () => {
     try {
-      const token = await AsyncStorage.getItem('access_token') || 'fake-token-for-dev';
-      
       wsRef.current = new ChatWebSocket(
         conversationId,
-        token,
         (newMessage: Message) => {
           setMessages(prev => [...prev, newMessage]);
           setTimeout(() => scrollToBottom(), 100);
@@ -68,7 +65,11 @@ export default function DoctorChatScreen() {
 
   const formatTime = (date: string) => {
     const d = new Date(date);
-    return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('es-EC', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'America/Guayaquil'
+    });
   };
 
   return (

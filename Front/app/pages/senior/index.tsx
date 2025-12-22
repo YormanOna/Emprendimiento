@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import authService, { User } from '@/services/authService';
 import statsService, { DashboardStats } from '@/services/statsService';
 import remindersService, { Reminder } from '@/services/remindersService';
@@ -13,6 +14,13 @@ export default function SeniorDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Auto-refresh al volver a la página
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   useEffect(() => {
     loadData();
@@ -251,21 +259,49 @@ export default function SeniorDashboard() {
       </View>
 
       {/* Accesos rápidos */}
-      <View style={styles.quickAccess}>
-        <TouchableOpacity 
-          style={styles.accessCard}
-          onPress={() => router.push('/pages/senior/medications-manage' as any)}
-        >
-          <Ionicons name="medical" size={32} color="#8b5cf6" />
-          <Text style={styles.accessText}>Gestionar Medicinas</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.accessCard}
-          onPress={() => router.push('/pages/senior/appointments-manage' as any)}
-        >
-          <Ionicons name="calendar" size={32} color="#10b981" />
-          <Text style={styles.accessText}>Gestionar Citas</Text>
-        </TouchableOpacity>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Accesos Rápidos</Text>
+        <View style={styles.quickAccessGrid}>
+          <TouchableOpacity 
+            style={styles.accessCard}
+            onPress={() => router.push('/pages/senior/medications-manage' as any)}
+          >
+            <View style={[styles.accessIconContainer, { backgroundColor: '#ede9fe' }]}>
+              <Ionicons name="medical" size={28} color="#8b5cf6" />
+            </View>
+            <Text style={styles.accessText}>Medicinas</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.accessCard}
+            onPress={() => router.push('/pages/senior/appointments-manage' as any)}
+          >
+            <View style={[styles.accessIconContainer, { backgroundColor: '#d1fae5' }]}>
+              <Ionicons name="calendar" size={28} color="#10b981" />
+            </View>
+            <Text style={styles.accessText}>Citas</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.accessCard}
+            onPress={() => router.push('/pages/senior/chat' as any)}
+          >
+            <View style={[styles.accessIconContainer, { backgroundColor: '#fce7f3' }]}>
+              <Ionicons name="chatbubbles" size={28} color="#ec4899" />
+            </View>
+            <Text style={styles.accessText}>Mensajes</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.accessCard}
+            onPress={() => router.push('/pages/senior/relations' as any)}
+          >
+            <View style={[styles.accessIconContainer, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="people" size={28} color="#f59e0b" />
+            </View>
+            <Text style={styles.accessText}>Mi Equipo</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Botón de hospitales */}
@@ -412,9 +448,37 @@ const styles = StyleSheet.create({
   },
   emptyState: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { fontSize: 14, color: '#94a3b8', marginTop: 12 },
-  quickAccess: { flexDirection: 'row', padding: 16, gap: 12, paddingBottom: 16 },
-  accessCard: { flex: 1, backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
-  accessText: { fontSize: 15, fontWeight: '600', color: '#1e293b', marginTop: 12 },
+  quickAccessGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  accessCard: { 
+    width: '48%',
+    backgroundColor: '#fff', 
+    padding: 16, 
+    borderRadius: 16, 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 4, 
+    elevation: 2 
+  },
+  accessIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  accessText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#1e293b', 
+    textAlign: 'center',
+  },
   hospitalButton: {
     backgroundColor: '#fff',
     borderRadius: 16,

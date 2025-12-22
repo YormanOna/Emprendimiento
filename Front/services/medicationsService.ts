@@ -10,6 +10,12 @@ export interface Medication {
   notes?: string;
   created_at: string;
   updated_at: string;
+  // Campos calculados/adicionales para la UI
+  medication_name?: string; // Alias para 'name'
+  dosage?: string; // Construido a partir de dose + unit
+  frequency?: string;
+  schedule?: string;
+  taken_today?: boolean;
 }
 
 export interface MedicationCreate {
@@ -75,10 +81,13 @@ class MedicationsService {
 
   async getMedication(medicationId: number): Promise<Medication | null> {
     try {
+      console.log('📡 Solicitando medicamento:', medicationId);
       const response = await api.get<Medication>(`/meds/medications/${medicationId}`);
+      console.log('📦 Respuesta del servidor:', response.status, response.data);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error obteniendo medicamento:', error);
+      console.error('Error details:', error.response?.status, error.response?.data);
       return null;
     }
   }

@@ -81,9 +81,14 @@ async def get_current_user_endpoint(
         senior_id = result.scalar_one_or_none()
     
     # Crear respuesta con senior_id si aplica
-    user_data = UserPublic.model_validate(user)
-    user_data.senior_id = senior_id
-    return user_data
+    return UserPublic(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        is_active=user.is_active,
+        senior_id=senior_id
+    )
 
 
 @router.get("/users", response_model=list[UserPublic])
@@ -92,6 +97,62 @@ async def get_all_users(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
+    return users
+
+
+@router.get("/users/search", response_model=list[UserPublic])
+async def search_users(
+    q: str,
+    role: str | None = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Buscar usuarios por nombre o email"""
+    from sqlalchemy import select, or_
+    from app.core.models import UserRole
+    from app.seniors.models import CareTeam, MembershipRole
+    from sqlalchemy.orm import selectinload
+    
+    query = select(User).where(
+        or_(
+            User.full_name.ilike(f"%{q}%"),
+            User.email.ilike(f"%{q}%")
+        )
+    )
+    
+    if role:
+        try:
+            user_role = UserRole(role)
+            query = query.where(User.role == user_role)
+        except ValueError:
+            pass
+    
+    result = await db.execute(query.order_by(User.created_at.desc()).limit(20))
+    users = result.scalars().all()
+    
+    # Si buscamos SENIOR, agregar el senior_id desde care_team
+    if role and role.upper() == 'SENIOR':
+        user_list = []
+        for user in users:
+            # Buscar el senior_id en care_team con membership_role='SELF'
+            care_result = await db.execute(
+                select(CareTeam)
+                .where(CareTeam.user_id == user.id)
+                .where(CareTeam.membership_role == MembershipRole.SELF)
+            )
+            care_team = care_result.scalar_one_or_none()
+            
+            # Crear un dict con los datos del usuario y el senior_id
+            user_dict = {
+                'id': user.id,
+                'full_name': user.full_name,
+                'email': user.email,
+                'role': user.role,
+                'is_active': user.is_active,
+                'senior_id': care_team.senior_id if care_team else None
+            }
+            user_list.append(UserPublic(**user_dict))
+        return user_list
+    
     return users
 
 

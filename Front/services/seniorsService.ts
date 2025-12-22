@@ -32,12 +32,16 @@ export interface TeamMember {
 
 export interface TeamMemberAdd {
   user_id: number;
+  membership_role: 'SELF' | 'DOCTOR' | 'NURSE' | 'CAREGIVER' | 'PRIMARY_CAREGIVER' | 'FAMILY' | 'OTHER';
+  can_view?: boolean;
+  can_edit?: boolean;
 }
 
 class SeniorsService {
-  async getSeniors(): Promise<Senior[]> {
+  async getSeniors(userId?: number): Promise<Senior[]> {
     try {
-      const response = await api.get<Senior[]>('/seniors/');
+      const params = userId ? { user_id: userId } : {};
+      const response = await api.get<Senior[]>('/seniors/', { params });
       return response.data;
     } catch (error) {
       console.error('Error obteniendo seniors:', error);

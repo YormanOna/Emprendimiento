@@ -1,13 +1,20 @@
 // services/chatService.ts
 import api from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 export interface Conversation {
   id: number;
-  title?: string;
+  senior_id: number;
+  senior_name: string;
+  doctor_user_id?: number;
+  status: string;
+  last_message?: {
+    content: string;
+    sent_at: string;
+  };
   created_at: string;
   updated_at: string;
-  last_message?: Message;
-  unread_count?: number;
 }
 
 export interface Message {
@@ -21,8 +28,8 @@ export interface Message {
 }
 
 export interface ConversationCreate {
-  title?: string;
-  participant_user_ids: number[];
+  senior_id: number;
+  doctor_user_id?: number;
 }
 
 export interface MessageCreate {
@@ -74,7 +81,6 @@ class ChatService {
 export class ChatWebSocket {
   private ws: WebSocket | null = null;
   private conversationId: number;
-  private token: string;
   private onMessage: (message: Message) => void;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -83,66 +89,117 @@ export class ChatWebSocket {
 
   constructor(
     conversationId: number,
-    token: string,
     onMessage: (message: Message) => void
   ) {
     this.conversationId = conversationId;
-    this.token = token;
     this.onMessage = onMessage;
+    
+    // Validar que onMessage sea una función
+    if (typeof this.onMessage !== 'function') {
+      console.error('❌ onMessage no es una función:', typeof this.onMessage);
+      throw new Error('onMessage debe ser una función');
+    }
   }
 
-  connect() {
-    // Obtener la URL base del API y convertirla a WebSocket
-    const apiUrl = 'http://192.168.100.43:8000'; // Misma IP que la API REST
-    const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
-    const fullWsUrl = `${wsUrl}/ws/conversations/${this.conversationId}?token=${this.token}`;
-    
-    console.log('🔌 Intentando conectar WebSocket:', fullWsUrl);
-    this.ws = new WebSocket(fullWsUrl);
+  async connect() {
+    try {
+      // Validar nuevamente antes de conectar
+      if (typeof this.onMessage !== 'function') {
+        console.error('❌ onMessage no es una función al conectar:', typeof this.onMessage);
+        return;
+      }
 
-    this.ws.onopen = () => {
-      console.log('✅ WebSocket conectado exitosamente');
-      this.reconnectAttempts = 0;
-      this.hasConnectedOnce = true;
-    };
+      // Obtener el token real del usuario
+      const token = await AsyncStorage.getItem('access_token');
+      if (!token) {
+        console.error('❌ No hay token de acceso disponible');
+        return;
+      }
 
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'message') {
-          this.onMessage({
-            id: data.id,
-            conversation_id: data.conversation_id,
-            sender_user_id: data.sender_user_id,
-            content: data.content,
-            sent_at: data.sent_at,
-          });
+      // Obtener la URL base del API y convertirla a WebSocket
+      const LOCAL_IP = '192.168.100.26'; // Debe coincidir con api.ts
+      let wsUrl: string;
+      
+      if (Platform.OS === 'android') {
+        wsUrl = `ws://${LOCAL_IP}:8000`;
+      } else if (Platform.OS === 'ios') {
+        wsUrl = 'ws://localhost:8000';
+      } else {
+        wsUrl = `ws://${LOCAL_IP}:8000`;
+      }
+      
+      const fullWsUrl = `${wsUrl}/ws/conversations/${this.conversationId}?token=${token}`;
+      
+      console.log('🔌 Intentando conectar WebSocket:', fullWsUrl.replace(token, 'TOKEN_OCULTO'));
+      this.ws = new WebSocket(fullWsUrl);
+
+      this.ws.onopen = () => {
+        console.log('✅ WebSocket conectado exitosamente');
+        this.reconnectAttempts = 0;
+        this.hasConnectedOnce = true;
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          // Verificar que sea un objeto JSON válido
+          if (typeof event.data !== 'string') {
+            console.warn('⚠️ Mensaje WebSocket no es string:', typeof event.data);
+            return;
+          }
+
+          const data = JSON.parse(event.data);
+          
+          // Verificar que sea un mensaje válido con el tipo correcto
+          if (!data || typeof data !== 'object') {
+            console.warn('⚠️ Datos WebSocket no son objeto:', data);
+            return;
+          }
+
+          if (data.type === 'message' && data.content) {
+            this.onMessage({
+              id: data.id,
+              conversation_id: data.conversation_id,
+              sender_user_id: data.sender_user_id,
+              content: data.content,
+              sent_at: data.sent_at,
+            });
+          } else {
+            // Puede ser un mensaje de sistema o conexión, ignorar silenciosamente
+            console.log('📩 Mensaje WebSocket (no es chat):', data.type || 'sin tipo');
+          }
+        } catch (error) {
+          // Solo logear si es un error real de parsing
+          if (error instanceof SyntaxError) {
+            console.warn('⚠️ Error parsing mensaje WebSocket:', event.data.substring(0, 100));
+          } else {
+            console.error('❌ Error procesando mensaje WebSocket:', error);
+          }
         }
-      } catch (error) {
-        console.error('Error procesando mensaje WebSocket:', error);
-      }
-    };
+      };
 
-    this.ws.onerror = (error) => {
-      // Solo mostrar advertencia si nunca se conectó (servidor no disponible)
-      if (!this.hasConnectedOnce && this.reconnectAttempts === 0) {
-        console.warn('⚠️ No se pudo conectar al chat. El servidor WebSocket no está disponible.');
-      }
-    };
+      this.ws.onerror = (error) => {
+        // Solo mostrar advertencia si nunca se conectó (servidor no disponible)
+        if (!this.hasConnectedOnce && this.reconnectAttempts === 0) {
+          console.warn('⚠️ No se pudo conectar al chat. El servidor WebSocket no está disponible.');
+        }
+      };
 
-    this.ws.onclose = () => {
-      // Solo reintentar si ya se había conectado anteriormente (desconexión inesperada)
-      // No reintentar si nunca se conectó (servidor no disponible)
-      if (this.hasConnectedOnce && this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-        setTimeout(() => {
-          this.reconnectAttempts++;
-          console.log(`🔄 Reintentando conexión WebSocket... Intento ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-          this.connect();
-        }, 3000 * this.reconnectAttempts);
-      } else if (!this.hasConnectedOnce && this.reconnectAttempts === 0) {
-        console.log('ℹ️ Chat no disponible. Necesitas iniciar el servidor backend para usar esta función.');
-      }
-    };
+      this.ws.onclose = () => {
+        // Solo reintentar si ya se había conectado anteriormente (desconexión inesperada)
+        // No reintentar si nunca se conectó (servidor no disponible)
+        if (this.hasConnectedOnce && this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+          setTimeout(() => {
+            this.reconnectAttempts++;
+            console.log(`🔄 Reintentando conexión WebSocket... Intento ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+            this.connect();
+          }, 3000 * this.reconnectAttempts);
+        } else if (!this.hasConnectedOnce && this.reconnectAttempts === 0) {
+          console.log('ℹ️ Chat no disponible. Necesitas iniciar el servidor backend para usar esta función.');
+        }
+      };
+    } catch (error) {
+      console.error('Error al conectar WebSocket:', error);
+    }
   }
 
   sendMessage(content: string) {

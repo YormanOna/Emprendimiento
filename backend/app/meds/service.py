@@ -8,9 +8,34 @@ from app.meds.models import Medication, MedicationSchedule, IntakeLog
 
 
 async def create_medication(db: AsyncSession, senior_id: int, data: dict) -> Medication:
+    # Extraer campos de horario si existen
+    schedule_data = {}
+    hours = data.pop('hours', None)
+    
+    if hours and len(hours) > 0:
+        # Solo crear schedule si hay al menos una hora especificada
+        schedule_data['hours'] = hours
+        schedule_data['start_date'] = data.pop('start_date', None)
+        schedule_data['end_date'] = data.pop('end_date', None)
+        schedule_data['days_of_week'] = data.pop('days_of_week', None)
+    else:
+        # Remover campos de schedule si no hay hours
+        data.pop('start_date', None)
+        data.pop('end_date', None)
+        data.pop('days_of_week', None)
+    
+    # Crear medicamento
     med = Medication(senior_id=senior_id, **data)
     db.add(med)
     await db.flush()
+    
+    # Si hay datos de horario, crear el schedule automáticamente
+    if schedule_data:
+        sched = MedicationSchedule(medication_id=med.id, **schedule_data)
+        db.add(sched)
+        await db.flush()
+        await create_medication_reminders(db, med, sched)
+    
     return med
 
 
@@ -92,6 +117,12 @@ async def list_intakes(db: AsyncSession, senior_id: int, dt_from: datetime | Non
 
 
 async def list_medications(db: AsyncSession, senior_id: int) -> list[Medication]:
-    q = select(Medication).where(Medication.senior_id == senior_id).order_by(Medication.name.asc())
+    from sqlalchemy.orm import selectinload
+    q = (
+        select(Medication)
+        .where(Medication.senior_id == senior_id)
+        .options(selectinload(Medication.schedules))
+        .order_by(Medication.name.asc())
+    )
     res = await db.execute(q)
     return list(res.scalars().all())

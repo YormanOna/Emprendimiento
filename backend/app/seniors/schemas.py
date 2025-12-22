@@ -108,9 +108,13 @@ class CareTeamMemberPublic(BaseModel):
     id: int
     senior_id: int
     user_id: int
-    membership_role: MembershipRole
+    user_name: str
+    user_email: str
+    user_role: str
+    membership_role: str  # Cambiado a str porque viene como .value
     can_view: bool
     can_edit: bool
+    added_at: str
 
     class Config:
         from_attributes = True
